@@ -11,9 +11,9 @@ Tarefildo Silva das Pendências é um bot assistente de tarefas com personalidad
 ## 📊 Status
 
 - ✅ **Workflows**: Telegram, WhatsApp, Lembretes agendados
-- ✅ **Segurança**: SQL Injection fix (21/23 queries parametrizadas)
-- ✅ **Documentação**: Spec completa, N8N guide, roadmap
-- 🔄 **Próximo**: Deploy, rate limiting, lembretes customizados
+- ✅ **Segurança**: SQL Injection fix (23/23 queries parametrizadas, testes inclusos)
+- ✅ **Documentação**: Spec completa, N8N guide, roadmap, testes de segurança
+- 🔄 **Próximo**: Rate limiting, lembretes customizados, fuso horário dinâmico
 
 ## 🏗️ Arquitetura
 

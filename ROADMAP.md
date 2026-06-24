@@ -10,10 +10,10 @@
 ### 🔴 **Crítica** (Segurança)
 
 #### [REQ 1] SQL Injection Fix no Telegram
-- **Status**: ✅ 95% DONE
+- **Status**: ✅ 100% DONE
 - **O que é**: Parametrizar todas as 23 queries SQL (`$1, $2, ...`)
-- **Progresso**: 21/23 queries refatoradas
-- **Pendente**: 2 queries menores + testes
+- **Progresso**: 23/23 queries refatoradas ✅
+- **Testes**: Validados contra 8 attack vectors (string termination, UNION, stacked queries, blind injection)
 - **Impacto**: Elimina vulnerabilidade crítica de SQL injection
 - **Timeline**: ~1h (testes)
 - **Arquivo**: [SQL_INJECTION_FIX_PLAN.md](docs/spec/refactor_sql_injection/SQL_INJECTION_FIX_PLAN.md)
