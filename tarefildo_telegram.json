@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const msg = $input.first().json.message || {};\nconst text = (msg.text || '').trim();\nif (!text) return [];\nconst chatId = String(msg.chat?.id || '');\nconst nome = msg.from?.first_name || 'chefe';\nconst phone = String(msg.from?.id || '');\nconst canal = 'telegram';\nconst whatsapp_id = phone + '@' + canal;\n\n// Verificar duplicata pendente\nconst globalState = $getWorkflowStaticData('global');\nconst dupKey = 'dup_' + whatsapp_id;\nconst dupPendente = globalState[dupKey] || null;\nlet resposta_duplicata = '';\n\nif (dupPendente) {\n  const resp = text.toLowerCase();\n  if (resp.includes('sim') || resp.includes('criar')) {\n    resposta_duplicata = 'CRIAR';\n  } else if (resp.includes('editar') || resp.includes('mudar')) {\n    resposta_duplicata = 'EDITAR';\n  } else if (resp.includes('cancelar') || resp.includes('nao') || resp.includes('não')) {\n    resposta_duplicata = 'CANCELAR';\n  } else {\n    resposta_duplicata = 'INVALIDO';\n  }\n}\n\nreturn [{ json: { phone, canal, whatsapp_id, chatId, text, nome, dupPendente, resposta_duplicata } }];"
+        "jsCode": "const msg = $input.first().json.message || {};\nconst text = (msg.text || '').trim();\nif (!text) return [];\nconst chatId = String(msg.chat?.id || '');\nconst nome = msg.from?.first_name || 'chefe';\nconst phone = String(msg.from?.id || '');\nconst canal = 'telegram';\nconst whatsapp_id = phone + '@' + canal;\n\n// RATE LIMIT: 3 segundos entre mensagens do mesmo usuário (REQ 2)\nconst now = Date.now();\nconst globalState = $getWorkflowStaticData('global');\nconst lastMsgKey = 'last_msg_' + whatsapp_id;\nconst lastTime = globalState[lastMsgKey] || 0;\nif (now - lastTime < 3000) {\n  return [{ json: { bloqueado_rate_limit: true, tempo_restante_s: Math.ceil((3000 - (now - lastTime)) / 1000) } }];\n}\nglobalState[lastMsgKey] = now;\n\n// Limpar entradas antigas (>1h) para não acumular memória\nfor (const key of Object.keys(globalState)) {\n  if (key.startsWith('last_msg_') && now - globalState[key] > 3600000) {\n    delete globalState[key];\n  }\n}\n\n// Verificar duplicata pendente\nconst dupKey = 'dup_' + whatsapp_id;\nconst dupPendente = globalState[dupKey] || null;\nlet resposta_duplicata = '';\n\nif (dupPendente) {\n  const resp = text.toLowerCase();\n  if (resp.includes('sim') || resp.includes('criar')) {\n    resposta_duplicata = 'CRIAR';\n  } else if (resp.includes('editar') || resp.includes('mudar')) {\n    resposta_duplicata = 'EDITAR';\n  } else if (resp.includes('cancelar') || resp.includes('nao') || resp.includes('não')) {\n    resposta_duplicata = 'CANCELAR';\n  } else {\n    resposta_duplicata = 'INVALIDO';\n  }\n}\n\nreturn [{ json: { phone, canal, whatsapp_id, chatId, text, nome, dupPendente, resposta_duplicata, bloqueado_rate_limit: false } }];"
       },
       "id": "a61c35a9-0256-418e-b2f2-d5004456d54d",
       "name": "Filtrar Mensagem",
@@ -37,6 +37,52 @@
         64
       ],
       "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.bloqueado_rate_limit }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "rate-limit-check"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rate-limit-bloqueado",
+      "name": "Rate Limit Bloqueado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [
+        -15376,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Se rate limit acionado, ignorar fluxo\nreturn [{ json: { acao: 'rate_limit_bloqueado', skip: true } }];"
+      },
+      "id": "rate-limit-responder",
+      "name": "Ignorar (Rate Limit)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15104,
+        -400
+      ]
     },
     {
       "parameters": {
