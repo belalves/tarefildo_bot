@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(grep -v queryParameters)",
+      "PowerShell(head -5)"
+    ]
+  }
+}

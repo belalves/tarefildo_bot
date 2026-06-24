@@ -1,0 +1,305 @@
+{
+  "name": "📝 Tarefildo - Lembrete de Tarefas 📝",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.canal }}",
+              "rightValue": "telegram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f6f7e87b-9580-4f37-b230-87449058d3d6",
+      "name": "Qual Canal?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [
+        2496,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.mensagem }}",
+        "additionalFields": {}
+      },
+      "id": "a6958d92-f23c-4d3d-84f4-986f5eefabd3",
+      "name": "Enviar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2704,
+        432
+      ],
+      "webhookId": "8e10a025-8ec5-444e-a4bd-fd71e3fb049c",
+      "credentials": {
+        "telegramApi": {
+          "id": "Tg2ndnk8e56GBk97",
+          "name": "Telegram account bot tarefildo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 07 * * *"
+            }
+          ]
+        }
+      },
+      "id": "7af430f1-e725-4446-8893-1cd44c5e0173",
+      "name": "Horários de Lembrete1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.id, t.titulo, t.data_vencimento, u.whatsapp_id, u.canais_ativos\nFROM tarefas t\nJOIN usuarios u ON u.id = t.usuario_id\nWHERE t.data_vencimento = CURRENT_DATE\nAND t.status = 'PENDENTE'\nAND t.lembrete_enviado = false;",
+        "options": {}
+      },
+      "id": "144d2d6e-3da1-4f20-b2ee-19bc377a0f84",
+      "name": "DB: Tarefas do Dia1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1824,
+        544
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.titulo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "85b91b5a-d790-4910-8110-ebdebd549767",
+      "name": "Tem Tarefas?1",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst grouped = {};\n\nfor (const item of items) {\n  const wid = item.json.whatsapp_id;\n  const canais = item.json.canais_ativos || [];\n  if (!grouped[wid]) grouped[wid] = { whatsapp_id: wid, canais, tarefas: [], ids: [] };\n  grouped[wid].tarefas.push(item.json.titulo);\n  grouped[wid].ids.push(item.json.id);\n}\n\nconst resultados = [];\n\nObject.values(grouped).forEach(data => {\n  const lista = data.tarefas.map((t, i) => `${i+1}. ${t}`).join('\\n');\n  const qtd = data.tarefas.length;\n  let msg;\n  if (qtd === 1) {\n    msg = `Passando pra lembrar: '${data.tarefas[0]}' eh pra hoje. Nao deixa virar bola de neve 👀`;\n  } else if (qtd <= 3) {\n    msg = `Fala, aqui eh o Tarefildo. ${qtd} pendencias pra hoje:\\n\\n${lista}\\n\\nBora resolver antes que vire colecao ☕`;\n  } else {\n    msg = `Rapaz... ${qtd} tarefas pra hoje 😬\\n\\n${lista}\\n\\nConfia no Tarefildo. Bora la!`;\n  }\n\n  const wid = data.whatsapp_id;\n  const canais = data.canais;\n\n  // Detectar canal pelo formato do whatsapp_id\n  if (wid.includes('@telegram')) {\n    // Usuario do Telegram: chatId eh o numero antes do @\n    const chatId = wid.split('@')[0];\n    resultados.push({ json: { canal: 'telegram', chatId, mensagem: msg, task_ids: data.ids } });\n  } else if (wid.includes('@c.us') || wid.includes('@s.whatsapp.net')) {\n    // Usuario do WhatsApp\n    resultados.push({ json: { canal: 'whatsapp', chatId: wid, mensagem: msg, task_ids: data.ids } });\n  } else {\n    // Tentar ambos se tiver canais_ativos\n    if (canais.includes('telegram')) {\n      const chatId = wid.split('@')[0];\n      resultados.push({ json: { canal: 'telegram', chatId, mensagem: msg, task_ids: data.ids } });\n    }\n    if (canais.includes('whatsapp')) {\n      resultados.push({ json: { canal: 'whatsapp', chatId: wid, mensagem: msg, task_ids: data.ids } });\n    }\n  }\n});\n\nreturn resultados;"
+      },
+      "id": "b80dbdb4-b1e4-40a1-8748-d0f6dd86e26f",
+      "name": "Agrupar por Usuário1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.mensagem }}",
+        "requestOptions": {}
+      },
+      "id": "e51510e2-9ce5-4346-87cb-93de52779026",
+      "name": "Enviar WhatsApp1",
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202409,
+      "position": [
+        2704,
+        640
+      ],
+      "credentials": {
+        "wahaApi": {
+          "id": "F3j9V0WpvTJ6FcNM",
+          "name": "WAHA credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE tarefas SET lembrete_enviado = true WHERE id IN ('{{ $json.task_ids.join(\"','\") }}');",
+        "options": {}
+      },
+      "id": "4a3dee9c-06b3-4d5c-9462-93c60b7447f4",
+      "name": "DB: Marcar Enviado1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2928,
+        544
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Qual Canal?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Telegram": {
+      "main": [
+        [
+          {
+            "node": "DB: Marcar Enviado1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horários de Lembrete1": {
+      "main": [
+        [
+          {
+            "node": "DB: Tarefas do Dia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: Tarefas do Dia1": {
+      "main": [
+        [
+          {
+            "node": "Tem Tarefas?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Tarefas?1": {
+      "main": [
+        [
+          {
+            "node": "Agrupar por Usuário1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar por Usuário1": {
+      "main": [
+        [
+          {
+            "node": "Qual Canal?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp1": {
+      "main": [
+        [
+          {
+            "node": "DB: Marcar Enviado1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "52b46d95-129d-459a-a20d-5af9a6e6d782",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5615ccd35b5f25f57ae9b9aad4dc517f67a024d48d00eeba11ff2b0a007a15b0"
+  },
+  "nodeGroups": [],
+  "id": "CBmjsCLBZTjLRcpL",
+  "tags": [
+    {
+      "name": "automacao",
+      "id": "bWTadWrGfkG25cyF",
+      "updatedAt": "2026-06-24T16:49:00.367Z",
+      "createdAt": "2026-06-24T16:49:00.367Z"
+    },
+    {
+      "name": "diario",
+      "id": "DPTbFjYngOvWhNWK",
+      "updatedAt": "2026-06-24T16:49:35.728Z",
+      "createdAt": "2026-06-24T16:49:35.728Z"
+    }
+  ]
+}
