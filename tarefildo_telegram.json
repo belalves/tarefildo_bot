@@ -152,7 +152,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO tarefas (usuario_id, titulo, descricao, data_vencimento, hora_vencimento, status, criado_em) SELECT u.id, '{{ $json.dados.titulo }}', '', {{ $json.tem_data ? \"'\" + $json.dados.data + \"'\" : 'NULL' }}, {{ $json.hora ? \"'\" + $json.hora + \"'\" : 'NULL' }}, '{{ $json.status_tarefa }}', NOW() FROM usuarios u WHERE u.whatsapp_id = '{{ $json.whatsapp_id }}' RETURNING id, titulo, data_vencimento, hora_vencimento, status;",
+        "query": "INSERT INTO tarefas (usuario_id, titulo, descricao, data_vencimento, hora_vencimento, status, criado_em) SELECT u.id, $1, '', $2, $3, $4, NOW() FROM usuarios u WHERE u.whatsapp_id = $5 RETURNING id, titulo, data_vencimento, hora_vencimento, status;",
+        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.tem_data ? $json.dados.data : null }}", "{{ $json.hora || null }}", "{{ $json.status_tarefa }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
       "id": "ff56e2fc-837b-41c3-b12d-b843fe05b84d",
@@ -187,7 +188,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE tarefas SET data_vencimento = {{ $json.tem_data ? \"'\" + $json.dados.data + \"'\" : 'data_vencimento' }}, hora_vencimento = {{ $json.hora ? \"'\" + $json.hora + \"'\" : 'hora_vencimento' }}, atualizado_em = NOW() WHERE id = '{{ $json.duplicata_id }}' RETURNING id, titulo, data_vencimento, hora_vencimento;",
+        "query": "UPDATE tarefas SET data_vencimento = COALESCE($1, data_vencimento), hora_vencimento = COALESCE($2, hora_vencimento), atualizado_em = NOW() WHERE id = $3 RETURNING id, titulo, data_vencimento, hora_vencimento;",
+        "queryParameters": ["{{ $json.tem_data ? $json.dados.data : null }}", "{{ $json.hora || null }}", "{{ $json.duplicata_id }}"],
         "options": {}
       },
       "id": "a7c2b57f-e40d-4b50-9b5d-82f5e9eca952",
