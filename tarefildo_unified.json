@@ -2079,10 +2079,34 @@
       "main": [
         [
           {
+            "node": "Rate Limit Bloqueado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Bloqueado?": {
+      "main": [
+        [
+          {
+            "node": "Ignorar (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Resposta Duplicata?",
             "type": "main",
             "index": 0
           }
+        ]
+      ]
+    },
+    "Ignorar (Rate Limit)": {
+      "main": [
+        [
         ]
       ]
     },
@@ -2185,6 +2209,17 @@
       ]
     },
     "DB: Verificar Status Fluxo": {
+      "main": [
+        [
+          {
+            "node": "Validar ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar ID": {
       "main": [
         [
           {
