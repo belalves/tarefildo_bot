@@ -963,6 +963,19 @@
     },
     {
       "parameters": {
+        "jsCode": "const text = $input.first().json.text.toLowerCase();\nconst state = $('Preparar Estado').first().json;\nconst prompt = $input.first().json.prompt;\n\nconst fallback = {\n  intent: null,\n  dados: {},\n  resposta: null,\n  fallback_attempt: false,\n  prompt: prompt,\n  text: $input.first().json.text\n};\n\n// Lista de tarefas\nif (text.match(/\\b(lista|minhas|tarefas|ver|show)\\b/i)) {\n  fallback.intent = 'listar_tarefas';\n  fallback.fallback_attempt = true;\n}\n// Adicionar tarefa\nelse if (text.match(/^(tarefa|adiciona?|add)\\b/i)) {\n  const titulo = text.replace(/^(tarefa|adiciona?|add)\\s*:?\\s*/i, '').trim();\n  if (titulo) {\n    fallback.intent = 'adicionar_tarefa';\n    fallback.dados = { titulo };\n    fallback.fallback_attempt = true;\n  }\n}\n// Ajuda / Comando\nelse if (text.match(/\\b(ajuda|help|comando|o que|quais)\\b/i)) {\n  fallback.intent = 'ajuda';\n  fallback.fallback_attempt = true;\n}\n// Concluir tarefa\nelse if (text.match(/\\b(concluir|done|pronto|finalizei|fechei)\\b/i)) {\n  fallback.intent = 'conversa';\n  fallback.resposta = 'Qual tarefa foi conclu\\u00edda? Me manda o nome certinho.';\n  fallback.fallback_attempt = true;\n}\n\nreturn [{ json: { ...fallback, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];"
+      },
+      "id": "32b4169d-a4b2-4c03-bc46-6c4b729f8eff",
+      "name": "Tentar Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13320,
+        768
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.deepseek.com/chat/completions",
         "authentication": "genericCredentialType",
@@ -1004,7 +1017,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst state = $('Preparar Estado').first().json;\nif (input.error || !input.choices) return [{ json: { intent: 'conversa', dados: {}, resposta: 'Probleminha tecnico 😅', phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];\nlet raw = input.choices[0].message.content.trim();\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nconst jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\nif (jsonMatch) raw = jsonMatch[0];\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch(e) { parsed = { intent: 'conversa', dados: {}, resposta: raw.length < 300 ? raw : 'Nao entendi 🙏' }; }\nif (parsed.intent === 'outro') parsed.intent = 'conversa';\nif (!parsed.resposta) parsed.resposta = 'Tudo certo! 😊';\nif (!parsed.dados) parsed.dados = {};\nreturn [{ json: { ...parsed, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];"
+        "jsCode": "const input = $input.first().json;\nconst state = $('Preparar Estado').first().json;\n\n// Se fallback_attempt está marcado, usar fallback (REQ 8)\nif (input.fallback_attempt === true && input.intent) {\n  if (!input.resposta) input.resposta = 'Tudo certo! 😊';\n  if (!input.dados) input.dados = {};\n  return [{ json: { ...input, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];\n}\n\n// Senão, processar resposta do DeepSeek\nif (input.error || !input.choices) {\n  return [{ json: { intent: 'conversa', dados: {}, resposta: 'Probleminha tecnico 😅', phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];\n}\n\nlet raw = input.choices[0].message.content.trim();\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nconst jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\nif (jsonMatch) raw = jsonMatch[0];\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch(e) { parsed = { intent: 'conversa', dados: {}, resposta: raw.length < 300 ? raw : 'Nao entendi 🙏' }; }\nif (parsed.intent === 'outro') parsed.intent = 'conversa';\nif (!parsed.resposta) parsed.resposta = 'Tudo certo! 😊';\nif (!parsed.dados) parsed.dados = {};\nreturn [{ json: { ...parsed, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];"
       },
       "id": "4ed06d03-92e8-4490-a767-a60b6f21889e",
       "name": "Parsear NLP",
@@ -2362,6 +2375,17 @@
       ]
     },
     "Preparar Prompt": {
+      "main": [
+        [
+          {
+            "node": "Tentar Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tentar Fallback": {
       "main": [
         [
           {

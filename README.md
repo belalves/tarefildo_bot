@@ -12,8 +12,9 @@ Tarefildo Silva das Pendências é um bot assistente de tarefas com personalidad
 
 - ✅ **Workflows**: Telegram, WhatsApp, Lembretes agendados
 - ✅ **Segurança**: SQL Injection fix (23/23 queries parametrizadas, testes inclusos)
+- ✅ **Resiliência**: Rate limiting + Fallback DeepSeek (graceful degradation)
 - ✅ **Documentação**: Spec completa, N8N guide, roadmap, testes de segurança
-- 🔄 **Próximo**: Rate limiting, lembretes customizados, fuso horário dinâmico
+- 🔄 **Próximo**: Lembretes customizados, fuso horário dinâmico, tarefas atrasadas
 
 ## 🏗️ Arquitetura
 
@@ -162,9 +163,9 @@ Cria:
 
 | Prioridade | Requisição | Status |
 |---|---|---|
-| 🔴 Crítica | SQL Injection Fix | ✅ 95% |
-| 🔴 Crítica | Rate Limiting Telegram | 🔄 Pendente |
-| 🟠 Alta | Fallback DeepSeek | 🔄 Pendente |
+| 🔴 Crítica | SQL Injection Fix | ✅ 100% |
+| 🔴 Crítica | Rate Limiting Telegram | ✅ 100% |
+| 🟠 Alta | Fallback DeepSeek | ✅ 100% |
 | 🟡 Média | Lembretes Customizados | 🔄 Pendente |
 | 🟡 Média | Tarefas Atrasadas | 🔄 Pendente |
 | 🟡 Média | Fuso Horário Dinâmico | 🔄 Pendente |

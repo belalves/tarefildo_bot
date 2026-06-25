@@ -31,12 +31,12 @@
 - **Arquivo**: [SPEC.md](docs/spec/SPEC.md) — Requisição 2
 
 #### [REQ 8] Fallback DeepSeek
-- **Status**: 🔄 PENDENTE
+- **Status**: ✅ DONE
 - **O que é**: Se IA cai, usar regex simples para comandos óbvios
 - **Por quê**: Graceful degradation — bot segue funcionando
 - **Comandos**: `/tarefas` lista, `adiciona:` cria, `/ajuda` menu
-- **Timeline**: ~2h
-- **Arquivo**: [SPEC.md](docs/spec/SPEC.md) — Requisição 8
+- **Timeline**: ✅ ~2h (completo)
+- **Arquivo**: [fallback_deepseek_tests.md](tests/fallback_deepseek_tests.md)
 
 ---
 
@@ -107,9 +107,9 @@
 
 | Req | Título | Prioridade | Tempo | Status | Depende |
 |---|---|---|---|---|---|
-| 1 | SQL Injection Fix | 🔴 Crítica | 1h | ✅ 95% | — |
-| 2 | Rate Limit Telegram | 🟠 Alta | 1h | 🔄 | — |
-| 8 | Fallback DeepSeek | 🟠 Alta | 2h | 🔄 | — |
+| 1 | SQL Injection Fix | 🔴 Crítica | 1h | ✅ 100% | — |
+| 2 | Rate Limit Telegram | 🟠 Alta | 1h | ✅ 100% | — |
+| 8 | Fallback DeepSeek | 🟠 Alta | 2h | ✅ 100% | — |
 | 3 | Lembretes Customizados | 🟡 Média | 3h | 🔄 | — |
 | 7 | Tarefas Atrasadas | 🟡 Média | 1h | 🔄 | — |
 | 9 | Fuso Horário Dinâmico | 🟡 Média | 2-3h | 🔄 | 3, 7 |
@@ -122,11 +122,11 @@
 ## 🎯 Roadmap de Sprints
 
 ### **Sprint 1** (v1.1) — Segurança & Resiliência
-**Duração**: ~4-5h  
+**Duração**: ✅ ~5-6h (COMPLETO)  
 **Objetivos**:
-- ✅ REQ 1: SQL Injection (fechar testes)
-- ✅ REQ 2: Rate Limiting Telegram
-- ✅ REQ 8: Fallback DeepSeek
+- ✅ REQ 1: SQL Injection (23/23 queries parametrizadas)
+- ✅ REQ 2: Rate Limiting Telegram (3s throttle)
+- ✅ REQ 8: Fallback DeepSeek (regex fallback)
 
 ### **Sprint 2** (v1.2) — Lembretes & Atrasos
 **Duração**: ~6-7h  
@@ -177,11 +177,13 @@
 ## 💡 Quick Stats
 
 - **Total Time**: ~21-25h (sprints 1-4)
-- **Críticos Pendentes**: 0 (tudo já tem spec!)
-- **Documentação**: ✅ 100% (1200+ linhas)
-- **Code Refatorado**: ✅ 21/23 queries
+- **Sprint 1 Progress**: ✅ 100% COMPLETO (5-6h)
+- **Críticos Pendentes**: 0 (Sprint 1 fechado!)
+- **Documentação**: ✅ 100% (1400+ linhas)
+- **Code Refatorado**: ✅ 23/23 queries parametrizadas
+- **Fallback Implementado**: ✅ Regex + DeepSeek error handling
 - **Workflows Criados**: ✅ 3 (Telegram, WhatsApp, Lembretes)
-- **Ready for Next Sprint**: ✅ YES
+- **Ready for Sprint 2**: ✅ YES
 
 ---
 
