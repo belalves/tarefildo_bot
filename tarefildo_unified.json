@@ -5,16 +5,16 @@
       "parameters": {
         "path": "tarefildo",
         "responseMode": "lastNode",
-        "responseData": "{% if $json.waiting %}waiting{% else %}success{% endif %}",
+        "responseData": "allData",
         "options": {}
       },
-      "id": "d6b33f6b-02a8-42fd-8922-1583a399d478",
+      "id": "8f2c7f47-f2d7-4441-9ec2-c4d07e95aa19",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -15792,
-        64
+        -3472,
+        -64
       ],
       "webhookId": "a00a49e3-e057-4218-a852-c721ed80be27"
     },
@@ -22,13 +22,13 @@
       "parameters": {
         "jsCode": "const body = $input.first().json;\n\n// Detectar origem da mensagem\nlet source = null;\nif (body.message?.from?.id) {\n  source = 'TELEGRAM';\n} else if (body.payload?.from || body.from) {\n  source = 'WHATSAPP';\n}\n\nif (!source) return []; // Ignorar se origem desconhecida\n\nreturn [{ json: { source, raw: body } }];"
       },
-      "id": "bd8c4e2c-1a5f-4c1f-9b2f-8f3c9d2a1b5e",
+      "id": "f310dadd-bf1a-43de-941a-cc93bc27e02a",
       "name": "Detect Source",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15600,
-        64
+        -3248,
+        -64
       ]
     },
     {
@@ -46,68 +46,70 @@
               "operator": "equals",
               "rightValue": "TELEGRAM"
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "c7d5e9f1-2a8c-4d5b-8e1f-9a3b2c5d6e7f",
+      "id": "683ec157-1914-4b19-87e4-05b33e9a10c8",
       "name": "Source === TELEGRAM?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -15408,
-        64
+        -3024,
+        -64
       ]
     },
     {
       "parameters": {
         "jsCode": "const raw = $input.first().json.raw;\nconst msg = raw.message || {};\nconst text = (msg.text || '').trim();\nif (!text) return [];\nconst chatId = String(msg.chat?.id || '');\nconst nome = msg.from?.first_name || 'chefe';\nconst phone = String(msg.from?.id || '');\nconst canal = 'telegram';\nconst whatsapp_id = phone + '@' + canal;\n\nreturn [{ json: { phone, canal, whatsapp_id, chatId, text, nome, source: 'TELEGRAM' } }];"
       },
-      "id": "e8f4a7c2-3b9d-4e6c-9f2a-1d4e5f6a7b8c",
+      "id": "ea7d9e22-154d-4583-99c2-7ac4a03960b5",
       "name": "Parse Telegram",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15200,
-        -50
+        -2752,
+        -144
       ]
     },
     {
       "parameters": {
         "jsCode": "const raw = $input.first().json.raw;\nconst payload = raw.payload || {};\nconst from = payload.from || '';\nconst text = (payload.body || payload.text || '').trim();\nif (!text) return [];\n\nconst phone = from.replace(/@s\\.whatsapp\\.net$/i, '').replace(/@c\\.us$/i, '').replace(/@lid$/i, '').replace(/\\D/g, '');\nconst whatsapp_id = phone + '@c.us';\nconst chatId = payload._data?.key?.remoteJidAlt || from;\nconst nome = (payload._data?.pushName || 'chefe').split(' ')[0];\nconst canal = 'whatsapp';\n\nreturn [{ json: { phone, canal, whatsapp_id, chatId, text, nome, source: 'WHATSAPP' } }];"
       },
-      "id": "f9g5b8d3-4c0e-5f7d-0a3b-2e5f6g7h8i9j",
+      "id": "d3f78bbf-37ca-46d1-a3be-4baee2660dbe",
       "name": "Parse WhatsApp",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15200,
-        150
+        -2752,
+        48
       ]
     },
     {
       "parameters": {
         "jsCode": "// Mesclar saídas de ambos os parsers\nconst items = $input.all();\nreturn items.map(i => ({ json: i.json }));"
       },
-      "id": "a0h6c9e4-5d1f-6g8e-1b4c-3f6g7h8i9j0k",
+      "id": "d8840326-fc2c-4d5e-85f6-9e4dd6f83d09",
       "name": "Merge Parsed States",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14992,
-        50
+        -2496,
+        -64
       ]
     },
     {
       "parameters": {
         "jsCode": "// UNIFIED: Aceita tanto Telegram quanto WhatsApp (ya parseados)\nconst input = $input.first().json;\nconst text = (input.text || '').trim();\nconst phone = input.phone;\nconst whatsapp_id = input.whatsapp_id;\nconst chatId = input.chatId;\nconst nome = input.nome;\nconst source = input.source; // TELEGRAM|WHATSAPP\nconst canal = input.canal;\n\nif (!text || !phone) return [];\n\n// RATE LIMIT: 3 segundos entre mensagens do mesmo usuário (REQ 2)\nconst now = Date.now();\nconst globalState = $getWorkflowStaticData('global');\nconst lastMsgKey = 'last_msg_' + whatsapp_id;\nconst lastTime = globalState[lastMsgKey] || 0;\nif (now - lastTime < 3000) {\n  return [{ json: { bloqueado_rate_limit: true, tempo_restante_s: Math.ceil((3000 - (now - lastTime)) / 1000) } }];\n}\nglobalState[lastMsgKey] = now;\n\n// Limpar entradas antigas (>1h) para não acumular memória\nfor (const key of Object.keys(globalState)) {\n  if (key.startsWith('last_msg_') && now - globalState[key] > 3600000) {\n    delete globalState[key];\n  }\n}\n\n// Verificar duplicata pendente\nconst dupKey = 'dup_' + whatsapp_id;\nconst dupPendente = globalState[dupKey] || null;\nlet resposta_duplicata = '';\n\nif (dupPendente) {\n  const resp = text.toLowerCase();\n  if (resp.includes('sim') || resp.includes('criar')) {\n    resposta_duplicata = 'CRIAR';\n  } else if (resp.includes('editar') || resp.includes('mudar')) {\n    resposta_duplicata = 'EDITAR';\n  } else if (resp.includes('cancelar') || resp.includes('nao') || resp.includes('não')) {\n    resposta_duplicata = 'CANCELAR';\n  } else {\n    resposta_duplicata = 'INVALIDO';\n  }\n}\n\nreturn [{ json: { phone, canal, whatsapp_id, chatId, text, nome, dupPendente, resposta_duplicata, bloqueado_rate_limit: false, source } }];"
       },
-      "id": "a61c35a9-0256-418e-b2f2-d5004456d54d",
+      "id": "78ea34bb-88ac-426c-81d5-3e7872bca01a",
       "name": "Filtrar Mensagem",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15568,
-        64
+        -2256,
+        -64
       ],
       "alwaysOutputData": false
     },
@@ -135,26 +137,26 @@
         },
         "options": {}
       },
-      "id": "rate-limit-bloqueado",
+      "id": "585b5c70-bac6-45cc-ae6c-2c65560d6fcb",
       "name": "Rate Limit Bloqueado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -15376,
-        -128
+        -2032,
+        -96
       ]
     },
     {
       "parameters": {
         "jsCode": "// Se rate limit acionado, ignorar fluxo\nreturn [{ json: { acao: 'rate_limit_bloqueado', skip: true } }];"
       },
-      "id": "rate-limit-responder",
+      "id": "0e402358-ed8d-45b9-b74e-81d9445803b7",
       "name": "Ignorar (Rate Limit)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15104,
-        -400
+        -1776,
+        -256
       ]
     },
     {
@@ -181,26 +183,26 @@
         },
         "options": {}
       },
-      "id": "2568c48f-0b28-411e-a918-800e6de5265f",
+      "id": "3fe6f0c3-7c20-4df3-8332-e19dd494a4a6",
       "name": "Resposta Duplicata?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -15376,
-        64
+        -1776,
+        -80
       ]
     },
     {
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst globalState = $getWorkflowStaticData('global');\nconst dupKey = 'dup_' + data.whatsapp_id;\nconst dupData = JSON.parse(globalState[dupKey] || '{}');\ndelete globalState[dupKey];\n\nconst nome = data.nome;\nconst chatId = data.chatId;\nconst resp = data.resposta_duplicata;\n\nif (resp === 'CRIAR') {\n  return [{ json: { ...data, ...dupData, acao_dup: 'CRIAR' } }];\n} else if (resp === 'EDITAR') {\n  return [{ json: { ...data, ...dupData, acao_dup: 'EDITAR' } }];\n} else if (resp === 'CANCELAR') {\n  return [{ json: { chatId, mensagem: `Ok ${nome}, nao criei. Menos bagunca na lista ☕`, acao_dup: 'CANCELAR' } }];\n} else {\n  return [{ json: { chatId, mensagem: `${nome}, responde 'sim criar', 'editar' ou 'cancelar' 👀`, acao_dup: 'INVALIDO' } }];\n}"
       },
-      "id": "a663bbe1-1fcd-4d51-95b7-601c937b3915",
+      "id": "f3bcc430-31cd-4d88-9bc5-1be978a47a28",
       "name": "Processar Resp Duplicata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15104,
-        -256
+        -1568,
+        -112
       ]
     },
     {
@@ -259,29 +261,28 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "98858e9d-121c-4fd3-a2df-49be993f384b",
+      "id": "6dc0fee0-c2d9-41e8-ab6b-dbe557aa1cf8",
       "name": "Ação Duplicata",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -14880,
-        -272
+        -1344,
+        -128
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO tarefas (usuario_id, titulo, descricao, data_vencimento, hora_vencimento, status, criado_em) SELECT u.id, $1, '', $2, $3, $4, NOW() FROM usuarios u WHERE u.whatsapp_id = $5 RETURNING id, titulo, data_vencimento, hora_vencimento, status;",
-        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.tem_data ? $json.dados.data : null }}", "{{ $json.hora || null }}", "{{ $json.status_tarefa }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "ff56e2fc-837b-41c3-b12d-b843fe05b84d",
+      "id": "ce5e1548-0d2c-4d87-a548-9401573f9e4c",
       "name": "DB: Criar Mesmo Assim",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14592,
-        -512
+        -864,
+        -672
       ],
       "credentials": {
         "postgres": {
@@ -295,29 +296,28 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = $('Filtrar Mensagem').first().json.chatId;\nlet df = ''; if (db.data_vencimento) { const p = db.data_vencimento.split('T')[0].split('-'); df = `${p[2]}/${p[1]}/${p[0]}`; }\nconst msg = `Beleza ${nome}, criei outra '${db.titulo}'${df ? ' pro dia ' + df : ''}. Mas olha, isso ta virando colecao 😅`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "92f8aead-eea6-49e5-aa0e-ec3531d5de7e",
+      "id": "68ad98e9-18bf-48f0-b76b-1dbca4e4535e",
       "name": "Resposta Criou Duplicata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14352,
-        -528
+        -624,
+        -688
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE tarefas SET data_vencimento = COALESCE($1, data_vencimento), hora_vencimento = COALESCE($2, hora_vencimento), atualizado_em = NOW() WHERE id = $3 RETURNING id, titulo, data_vencimento, hora_vencimento;",
-        "queryParameters": ["{{ $json.tem_data ? $json.dados.data : null }}", "{{ $json.hora || null }}", "{{ $json.duplicata_id }}"],
         "options": {}
       },
-      "id": "a7c2b57f-e40d-4b50-9b5d-82f5e9eca952",
+      "id": "f1251a8e-d0aa-4f7f-8a09-6c299617ad7f",
       "name": "DB: Editar Existente",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14608,
-        -336
+        -880,
+        -496
       ],
       "credentials": {
         "postgres": {
@@ -331,42 +331,41 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = $('Filtrar Mensagem').first().json.chatId;\nlet df = ''; if (db.data_vencimento) { const p = db.data_vencimento.split('T')[0].split('-'); df = `${p[2]}/${p[1]}/${p[0]}`; }\nconst msg = `Pronto ${nome}, editei '${db.titulo}'${df ? ' pro dia ' + df : ''}. Menos bagunca na lista ☕`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "1f05b8cc-339a-413c-ae35-346c25b81ae5",
+      "id": "867df229-be1a-4d4b-8e60-43097e7fa0f1",
       "name": "Resposta Editou Existente",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14336,
-        -352
+        -608,
+        -512
       ]
     },
     {
       "parameters": {
         "jsCode": "const whatsapp_id = ($json.whatsapp_id || '').trim();\nif (!whatsapp_id || whatsapp_id.length === 0) return [];\nif (whatsapp_id.length > 100) return [{ json: { error: 'ID inválido' } }];\nif (!whatsapp_id.match(/^\\d+@(telegram|c\\.us|s\\.whatsapp\\.net)$/)) {\n  return [{ json: { error: 'Formato de ID inválido' } }];\n}\nreturn [{ json: { whatsapp_id } }];"
       },
-      "id": "validate-status-fluxo-001",
+      "id": "7d9dc8a5-9293-4265-a709-9c3aa89574b6",
       "name": "Validar ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15200,
-        224
+        -1344,
+        112
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT status_fluxo, confirmacao_pendente_id FROM usuarios WHERE whatsapp_id = $1 LIMIT 1;",
-        "queryParameters": ["{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "0d7d50dc-6d1b-40f5-90c8-a63061829c0a",
+      "id": "451f7512-9793-41f7-9d6e-4a15c8d507ce",
       "name": "DB: Verificar Status Fluxo",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -15104,
-        224
+        -1552,
+        64
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -381,13 +380,13 @@
       "parameters": {
         "jsCode": "const filtro = $('Filtrar Mensagem').first().json;\nconst db = $input.first().json;\nconst status_fluxo = db.status_fluxo || 'NOVO';\nconst confirmacao_pendente_id = db.confirmacao_pendente_id || null;\nreturn [{ json: { ...filtro, status_fluxo, confirmacao_pendente_id } }];"
       },
-      "id": "1faa118c-f4af-429f-8905-8566d05acb7f",
+      "id": "4a4844a1-ed16-4e0e-ab56-8f7d6d6005f0",
       "name": "Preparar Fluxo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14880,
-        208
+        -1072,
+        112
       ]
     },
     {
@@ -446,26 +445,26 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "ee3b0ff7-2562-4230-882f-fd03e9d1edcd",
+      "id": "89cd3ed4-093d-4de8-af57-2426917e75f1",
       "name": "Tipo de Fluxo",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -14704,
-        192
+        -896,
+        96
       ]
     },
     {
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst texto = data.text.toLowerCase().trim();\nconst confirmou = ['sim', 's', 'si', 'yes', 'y', 'sou', 'sou eu', 'sou sim'].includes(texto);\nconst negou = ['nao', 'não', 'n', 'no', 'nope', 'nao sou'].includes(texto);\nif (confirmou) return [{ json: { ...data, acao_confirmacao: 'SIM' } }];\nelse if (negou) return [{ json: { ...data, acao_confirmacao: 'NAO' } }];\nelse return [{ json: { ...data, acao_confirmacao: 'INVALIDO' } }];"
       },
-      "id": "673dbe2c-ff94-490f-894b-937d34aa0ced",
+      "id": "84f1d589-8648-4321-9f0b-d3e0a7b6cb96",
       "name": "Processar Confirmação",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14496,
-        48
+        -688,
+        -48
       ]
     },
     {
@@ -524,29 +523,28 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "fd1678f5-7ee2-4bb9-b0ed-85a9174aee7b",
+      "id": "a693048c-60b8-410e-ba1a-c1df5efc3e4a",
       "name": "Confirmou?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -14288,
-        32
+        -480,
+        -64
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE usuarios SET whatsapp_id = $1, canais_ativos = canais_ativos || to_jsonb(ARRAY[$2]::text[]), status_fluxo = 'ATIVO', confirmacao_pendente_id = NULL, atualizado_em = NOW() WHERE id = $3 RETURNING id, nome;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.canal }}", "{{ $json.confirmacao_pendente_id }}"],
         "options": {}
       },
-      "id": "6543d42b-f259-4fa4-b3eb-d4c375aa2f63",
+      "id": "7391cc42-2930-46c1-8c56-a479f88f723e",
       "name": "DB: Consolidar Conta",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14032,
-        -256
+        -224,
+        -352
       ],
       "credentials": {
         "postgres": {
@@ -559,29 +557,28 @@
       "parameters": {
         "jsCode": "const nome = $('Filtrar Mensagem').first().json.nome;\nconst chatId = $('Filtrar Mensagem').first().json.chatId;\nconst msg = `${nome}, conta consolidada! Suas tarefas de antes ja estao aqui. Bora resolver 💪`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "8ae345eb-1d5c-4017-80bc-6c9c75c81464",
+      "id": "5cfa7bcd-b564-4982-b4bb-1288e58e332a",
       "name": "Resposta Consolidou",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13760,
-        -256
+        48,
+        -352
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, canais_ativos, status_fluxo, criado_em) VALUES (gen_random_uuid(), $1, $2, 'America/Sao_Paulo', true, to_jsonb(ARRAY[$3]::text[]), 'ATIVO', NOW()) ON CONFLICT (whatsapp_id) DO UPDATE SET status_fluxo = 'ATIVO', confirmacao_pendente_id = NULL RETURNING id;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.nome }}", "{{ $json.canal }}"],
         "options": {}
       },
-      "id": "261faa2d-3854-4751-a798-2d4db5170685",
+      "id": "490e744c-4a27-41ed-955f-518e375c1a36",
       "name": "DB: Criar Novo Usuário",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14048,
-        -96
+        -240,
+        -192
       ],
       "credentials": {
         "postgres": {
@@ -594,42 +591,41 @@
       "parameters": {
         "jsCode": "const nome = $('Filtrar Mensagem').first().json.nome;\nconst chatId = $('Filtrar Mensagem').first().json.chatId;\nconst msg = `${nome}, beleza! Cadastro novo criado. Pode mandar suas tarefas que o Tarefildo resolve ☕`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "ac5a74b0-90fd-4240-8de9-9185fef5d93d",
+      "id": "50aa968f-02c7-4ed1-acdc-1ec7de69a21f",
       "name": "Resposta Novo Cadastro",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13760,
-        -96
+        48,
+        -192
       ]
     },
     {
       "parameters": {
         "jsCode": "const nome = $('Filtrar Mensagem').first().json.nome;\nconst chatId = $('Filtrar Mensagem').first().json.chatId;\nconst msg = `${nome}, nao entendi. Responde 'sim' ou 'nao' 👀`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "1e7440c7-d253-4263-897c-f6a82c7b8cb6",
+      "id": "cbfcb90a-ea11-40b4-876f-7654e3cf085d",
       "name": "Resposta Inválida",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14064,
-        96
+        -256,
+        0
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT id, nome, canais_ativos FROM usuarios WHERE LOWER(nome) = LOWER($1) AND whatsapp_id != $2 LIMIT 1;",
-        "queryParameters": ["{{ $json.nome }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "56737948-a321-4d28-b0a6-314bc79d18f2",
+      "id": "a6acbb8d-c797-4112-928a-a40c16135506",
       "name": "DB: Buscar por Nome",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14496,
-        224
+        -688,
+        128
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -643,13 +639,13 @@
       "parameters": {
         "jsCode": "const filtro = $('Preparar Fluxo').first().json;\nconst db = $input.first().json;\nconst encontrou = db.id ? true : false;\nreturn [{ json: { ...filtro, encontrou, usuario_encontrado_id: db.id || null, canais_encontrados: db.canais_ativos || [] } }];"
       },
-      "id": "2aa0d906-8762-4344-a6f6-9f2aa56fd401",
+      "id": "3e39176a-503d-4a43-aae6-0175c84963a2",
       "name": "Avaliar Match",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14288,
-        224
+        -480,
+        128
       ]
     },
     {
@@ -677,29 +673,28 @@
         },
         "options": {}
       },
-      "id": "29794083-8071-4f9a-86e7-dd501e6798cf",
+      "id": "183f360b-f6c7-440e-b7b0-1d36aa26338e",
       "name": "Encontrou Match?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -14064,
-        224
+        -256,
+        128
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, canais_ativos, status_fluxo, confirmacao_pendente_id, criado_em) VALUES (gen_random_uuid(), $1, $2, 'America/Sao_Paulo', true, to_jsonb(ARRAY[$3]::text[]), 'AGUARDANDO_CONFIRMACAO', $4, NOW()) ON CONFLICT (whatsapp_id) DO UPDATE SET status_fluxo = 'AGUARDANDO_CONFIRMACAO', confirmacao_pendente_id = $4 RETURNING id;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.nome }}", "{{ $json.canal }}", "{{ $json.usuario_encontrado_id }}"],
         "options": {}
       },
-      "id": "3c21c22e-c6c7-434f-812e-4ef717377606",
+      "id": "54aee72d-3eff-4c81-a21b-5603ffeeb3b4",
       "name": "DB: Marcar Aguardando",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -13760,
-        160
+        48,
+        64
       ],
       "credentials": {
         "postgres": {
@@ -712,29 +707,28 @@
       "parameters": {
         "jsCode": "const data = $('Avaliar Match').first().json;\nconst nome = data.nome;\nconst chatId = data.chatId;\nconst canal_anterior = (data.canais_encontrados || [])[0] || 'outro canal';\nconst msg = `${nome}, achei um cadastro seu do ${canal_anterior}. Eh voce mesmo? Responde 'sim' ou 'nao'.`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "f367891d-892e-4937-85bd-c0831d82bae8",
+      "id": "9c7a2894-f780-40f4-bbb3-4b7135905133",
       "name": "Perguntar Confirmação",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13504,
-        160
+        304,
+        64
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, canais_ativos, status_fluxo, criado_em) VALUES (gen_random_uuid(), $1, $2, 'America/Sao_Paulo', true, to_jsonb(ARRAY[$3]::text[]), 'ATIVO', NOW()) ON CONFLICT (whatsapp_id) DO UPDATE SET status_fluxo = 'ATIVO' RETURNING id;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.nome }}", "{{ $json.canal }}"],
         "options": {}
       },
-      "id": "e7b717c6-bb44-4e05-ae19-24a3986f66b7",
+      "id": "06f1dc4d-4a98-4fed-a870-50956362ba5a",
       "name": "DB: Criar Direto",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -13760,
-        336
+        48,
+        240
       ],
       "credentials": {
         "postgres": {
@@ -747,13 +741,13 @@
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst text = data.text.toLowerCase().trim();\nconst saudacoes = ['oi', 'ola', 'olá', 'hey', 'eai', 'e ai', 'bom dia', 'boa tarde', 'boa noite', 'hello', 'hi', '/start', 'opa', 'fala', 'salve', 'yo'];\nconst ehSaudacao = saudacoes.some(s => text === s || text === s + '!');\nreturn [{ json: { ...data, ehSaudacao } }];"
       },
-      "id": "a6a6501c-5c55-44cc-8f1a-334af151265f",
+      "id": "e40588bb-93da-410b-8633-04b6313a2b03",
       "name": "Detectar Saudação",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14496,
-        384
+        -688,
+        288
       ]
     },
     {
@@ -781,42 +775,41 @@
         },
         "options": {}
       },
-      "id": "3bd5c673-c151-4cf7-b261-dbe40feddcd0",
+      "id": "944a4ac6-a2fa-49b2-8e8d-2ab1e0338da8",
       "name": "É Saudação?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -14288,
-        384
+        -480,
+        288
       ]
     },
     {
       "parameters": {
         "jsCode": "const nome = $input.first().json.nome || 'chefe';\nconst chatId = $input.first().json.chatId;\nconst msg = `Fala ${nome}, aqui eh o Tarefildo Silva das Pendencias ☕\\n\\nBora organizar essa vida?\\n\\n📋 Tarefas\\n• 'adiciona tarefa pagar boleto dia 25'\\n• 'minhas tarefas'\\n• 'conclui tarefa pagar boleto'\\n\\n🔔 Lembretes\\n• 'me lembra de ligar pro banco as 14h'\\n• 'meus lembretes'\\n\\nTamo junto nas pendencias 👀`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "6fa25200-ee27-4551-be33-f63c47f87776",
+      "id": "aaaa1b78-40b8-4782-9240-e4548561b519",
       "name": "Menu Boas-vindas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14064,
-        368
+        -256,
+        272
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "WITH upsert_user AS (\n  INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, canais_ativos, status_fluxo, criado_em)\n  VALUES (gen_random_uuid(), $1, $2, 'America/Sao_Paulo', true, to_jsonb(ARRAY[$3]::text[]), 'ATIVO', NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE SET nome = EXCLUDED.nome, status_fluxo = 'ATIVO'\n  RETURNING id\n)\nSELECT t.id as tarefa_pendente_id, t.titulo as tarefa_pendente_titulo\nFROM upsert_user u\nLEFT JOIN tarefas t ON t.usuario_id = u.id AND t.status = 'AGUARDANDO_DATA'\nORDER BY t.criado_em DESC LIMIT 1;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.nome }}", "{{ $json.canal }}"],
         "options": {}
       },
-      "id": "4caa49aa-dc8f-40ac-8e65-a37aecf9aabb",
+      "id": "e2b34d23-7958-4725-b7b5-0d65caa4888d",
       "name": "DB: Verificar Pendência",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -14064,
-        608
+        -304,
+        496
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -831,13 +824,13 @@
       "parameters": {
         "jsCode": "const filtro = $('Preparar Fluxo').first().json;\nconst dbResult = $input.first().json;\nconst temPendencia = dbResult.tarefa_pendente_id ? true : false;\nreturn [{ json: { ...filtro, temPendencia, tarefa_pendente_id: dbResult.tarefa_pendente_id || null, tarefa_pendente_titulo: dbResult.tarefa_pendente_titulo || null } }];"
       },
-      "id": "4a7d83b5-21da-4b2d-9527-92a82661c2d7",
+      "id": "c93cd152-b05a-42e1-857b-dc753d20e873",
       "name": "Preparar Estado",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13840,
-        592
+        -96,
+        480
       ]
     },
     {
@@ -865,26 +858,26 @@
         },
         "options": {}
       },
-      "id": "87f24395-78df-4ae2-adcf-585fcd0a65b9",
+      "id": "2aac4f98-0024-48af-b1a2-33dee1ce3721",
       "name": "Tem Pendência?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -13648,
-        592
+        96,
+        496
       ]
     },
     {
       "parameters": {
         "jsCode": "const text = $input.first().json.text;\nconst hoje = new Date().toISOString().split('T')[0];\nconst prompt = 'O usuario informou uma data para uma tarefa pendente. Extraia a data e retorne APENAS JSON puro com campos: data (formato YYYY-MM-DD) e resposta (confirmacao na voz do Tarefildo). Hoje eh ' + hoje + '. Se disser amanha calcule. Se disser sexta calcule a proxima. Se nao conseguir retorne data vazio.';\nreturn [{ json: { prompt, text } }];"
       },
-      "id": "22039081-5b59-40c6-a81e-792013107f1b",
+      "id": "f7cd6931-6865-45fd-894c-50a1a28812ab",
       "name": "Preparar Prompt Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13408,
-        496
+        368,
+        400
       ]
     },
     {
@@ -909,13 +902,13 @@
           "timeout": 15000
         }
       },
-      "id": "51381177-6075-4a6e-91b2-12575225871d",
+      "id": "624523f3-95fa-4899-a18d-94480df74ca8",
       "name": "DeepSeek: Extrair Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -13200,
-        496
+        608,
+        400
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -931,13 +924,13 @@
       "parameters": {
         "jsCode": "const input = $input.first().json;\nconst state = $('Preparar Estado').first().json;\nlet data = ''; let resposta = '';\ntry { let raw = input.choices[0].message.content.trim(); raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim(); const match = raw.match(/\\{[\\s\\S]*\\}/); if (match) raw = match[0]; const parsed = JSON.parse(raw); data = parsed.data || ''; resposta = parsed.resposta || ''; } catch(e) { data = ''; resposta = 'Nao entendi a data.'; }\nreturn [{ json: { ...state, data_extraida: data, resposta_data: resposta } }];"
       },
-      "id": "ccb5fadc-a1f8-43ab-982f-df7c31366cb5",
+      "id": "857c1b85-50e1-40e2-be49-b214c5361881",
       "name": "Parsear Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12992,
-        496
+        816,
+        400
       ]
     },
     {
@@ -964,29 +957,28 @@
         },
         "options": {}
       },
-      "id": "16be59d5-f646-47bd-b024-85e903e21682",
+      "id": "a21b443a-adef-4533-bdec-9a97c71dcd8b",
       "name": "Data Válida?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -12784,
-        496
+        1024,
+        400
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE tarefas SET data_vencimento = $1, status = 'PENDENTE', atualizado_em = NOW() WHERE id = $2 RETURNING titulo, data_vencimento;",
-        "queryParameters": ["{{ $json.data_extraida }}", "{{ $json.tarefa_pendente_id }}"],
         "options": {}
       },
-      "id": "03e44de5-787a-4e46-87ca-0785c88044fc",
+      "id": "e845eecc-f1da-47c5-9dbb-b6307bdd0c2d",
       "name": "DB: Salvar Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12512,
-        336
+        1296,
+        240
       ],
       "credentials": {
         "postgres": {
@@ -999,52 +991,52 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst state = $('Preparar Estado').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst d = db.data_vencimento || ''; const titulo = db.titulo || state.tarefa_pendente_titulo;\nlet df = ''; if (d) { const p = d.split('T')[0].split('-'); df = `${p[2]}/${p[1]}/${p[0]}`; }\nconst msg = `Pronto ${nome}, '${titulo}' pro dia ${df}. Tamo junto 👀`;\nreturn [{ json: { chatId: state.chatId, mensagem: msg } }];"
       },
-      "id": "dfd6b195-e2f3-4b45-a30a-b036caf6b941",
+      "id": "84526509-d002-4ced-9e8f-dd331e67d749",
       "name": "Confirmar Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12288,
-        336
+        1520,
+        240
       ]
     },
     {
       "parameters": {
         "jsCode": "const state = $('Preparar Estado').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst msg = `${nome}, nao peguei a data. Me fala tipo 'dia 25' ou 'proxima sexta' 😬`;\nreturn [{ json: { chatId: state.chatId, mensagem: msg } }];"
       },
-      "id": "4eb5961b-6d3d-48da-b4f8-91ef1083564d",
+      "id": "400f1ac7-073b-492e-9d6d-e63fa8bfc52f",
       "name": "Pedir Data Novamente",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12512,
-        512
+        1296,
+        416
       ]
     },
     {
       "parameters": {
         "jsCode": "const text = $input.first().json.text;\nconst nome = $input.first().json.nome || 'chefe';\nconst hoje = new Date().toISOString().split('T')[0];\nconst prompt = 'Voce eh o Tarefildo Silva das Pendencias, bot assistente de tarefas. Funcionario raiz, engracado, sarcastico. O usuario se chama ' + nome + '. Usa: bora resolver, ja era pra ontem, confia no Tarefildo. Emojis moderados. Seja curto. Responda APENAS JSON puro sem markdown contendo: intent (adicionar_tarefa ou listar_tarefas ou concluir_tarefa ou editar_tarefa ou excluir_tarefa ou adicionar_lembrete ou listar_lembretes ou busca_natural ou ajuda ou conversa), dados (titulo, titulo_atual, novo_titulo, descricao, data YYYY-MM-DD, nova_data YYYY-MM-DD, hora HH:MM, nova_hora HH:MM, id, consulta, periodo, status_filtro, termo), resposta (frase do Tarefildo). Para editar_tarefa use titulo_atual com o nome atual e nova_data ou nova_hora ou novo_titulo com o valor novo. Para excluir_tarefa use titulo com o nome da tarefa a remover. Para busca_natural quando usuario perguntar sobre tarefas passadas ou futuras ou buscar algo especifico use: consulta (texto da busca), periodo (hoje ou amanha ou ontem ou semana ou semana_passada ou proxima_semana ou mes ou mes_passado ou tudo), status_filtro (PENDENTE ou CONCLUIDA ou CANCELADA ou todos), termo (palavra-chave). Para detectar_duplicatas quando usuario perguntar sobre tarefas duplicadas ou repetidas. Para limpar_duplicatas quando usuario confirmar que quer remover duplicatas. Hoje eh ' + hoje + '. Datas relativas converta para YYYY-MM-DD.';\nreturn [{ json: { prompt, text } }];"
       },
-      "id": "a619d324-b357-4a45-bbb8-77b3700df7bb",
+      "id": "1eebf767-cb2f-479a-9c7f-87889d59e611",
       "name": "Preparar Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13424,
-        768
+        336,
+        624
       ]
     },
     {
       "parameters": {
         "jsCode": "const text = $input.first().json.text.toLowerCase();\nconst state = $('Preparar Estado').first().json;\nconst prompt = $input.first().json.prompt;\n\nconst fallback = {\n  intent: null,\n  dados: {},\n  resposta: null,\n  fallback_attempt: false,\n  prompt: prompt,\n  text: $input.first().json.text\n};\n\n// Lista de tarefas\nif (text.match(/\\b(lista|minhas|tarefas|ver|show)\\b/i)) {\n  fallback.intent = 'listar_tarefas';\n  fallback.fallback_attempt = true;\n}\n// Adicionar tarefa\nelse if (text.match(/^(tarefa|adiciona?|add)\\b/i)) {\n  const titulo = text.replace(/^(tarefa|adiciona?|add)\\s*:?\\s*/i, '').trim();\n  if (titulo) {\n    fallback.intent = 'adicionar_tarefa';\n    fallback.dados = { titulo };\n    fallback.fallback_attempt = true;\n  }\n}\n// Ajuda / Comando\nelse if (text.match(/\\b(ajuda|help|comando|o que|quais)\\b/i)) {\n  fallback.intent = 'ajuda';\n  fallback.fallback_attempt = true;\n}\n// Concluir tarefa\nelse if (text.match(/\\b(concluir|done|pronto|finalizei|fechei)\\b/i)) {\n  fallback.intent = 'conversa';\n  fallback.resposta = 'Qual tarefa foi conclu\\u00edda? Me manda o nome certinho.';\n  fallback.fallback_attempt = true;\n}\n\nreturn [{ json: { ...fallback, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];"
       },
-      "id": "32b4169d-a4b2-4c03-bc46-6c4b729f8eff",
+      "id": "4fe2053d-6a6f-46d0-94d5-e69d08edd7e6",
       "name": "Tentar Fallback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13320,
-        768
+        512,
+        624
       ]
     },
     {
@@ -1069,13 +1061,13 @@
           "timeout": 15000
         }
       },
-      "id": "a55fb2a6-7ab7-4441-9a31-81f49d21ed31",
+      "id": "04ea28df-5ca8-4c7a-bcb4-4c805f385f8f",
       "name": "DeepSeek NLP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -13216,
-        768
+        720,
+        624
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -1092,13 +1084,13 @@
       "parameters": {
         "jsCode": "const input = $input.first().json;\nconst state = $('Preparar Estado').first().json;\n\n// Se fallback_attempt está marcado, usar fallback (REQ 8)\nif (input.fallback_attempt === true && input.intent) {\n  if (!input.resposta) input.resposta = 'Tudo certo! 😊';\n  if (!input.dados) input.dados = {};\n  return [{ json: { ...input, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];\n}\n\n// Senão, processar resposta do DeepSeek\nif (input.error || !input.choices) {\n  return [{ json: { intent: 'conversa', dados: {}, resposta: 'Probleminha tecnico 😅', phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];\n}\n\nlet raw = input.choices[0].message.content.trim();\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nconst jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\nif (jsonMatch) raw = jsonMatch[0];\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch(e) { parsed = { intent: 'conversa', dados: {}, resposta: raw.length < 300 ? raw : 'Nao entendi 🙏' }; }\nif (parsed.intent === 'outro') parsed.intent = 'conversa';\nif (!parsed.resposta) parsed.resposta = 'Tudo certo! 😊';\nif (!parsed.dados) parsed.dados = {};\nreturn [{ json: { ...parsed, phone: state.phone, chatId: state.chatId, whatsapp_id: state.whatsapp_id } }];"
       },
-      "id": "4ed06d03-92e8-4490-a767-a60b6f21889e",
+      "id": "54cfe20e-81a3-407e-92f1-fb242a298ae0",
       "name": "Parsear NLP",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12992,
-        752
+        928,
+        608
       ]
     },
     {
@@ -1341,29 +1333,28 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "54864769-e377-454d-9d88-7b33c3f249f5",
+      "id": "7fa4247e-7fa7-43cd-8084-7ec5fbd82b4d",
       "name": "Roteador",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -12752,
-        992
+        1104,
+        1168
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' AND t.titulo ILIKE $2 ORDER BY t.criado_em DESC LIMIT 5;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ '%' + ($json.dados.titulo_atual || $json.dados.titulo) + '%' }}"],
         "options": {}
       },
-      "id": "7bc974fc-d8f9-4d25-a8d7-ae369868b821",
+      "id": "85c54a15-95e6-4fbf-a4de-a96196b945fc",
       "name": "DB: Buscar para Editar",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
-        1456
+        1344,
+        1952
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1378,13 +1369,13 @@
       "parameters": {
         "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst dados = state.dados || {};\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa. Me fala o nome certinho.` } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual dessas?\\n\\n${lista}\\n\\nMe fala o nome completo.` } }];\n}\n\nconst tarefa = validos[0].json;\nconst updates = [];\nif (dados.nova_data) updates.push(`data_vencimento = '${dados.nova_data}'`);\nif (dados.nova_hora) updates.push(`hora_vencimento = '${dados.nova_hora}'`);\nif (dados.novo_titulo) updates.push(`titulo = '${dados.novo_titulo}'`);\nupdates.push(`atualizado_em = NOW()`);\n\nreturn [{ json: { chatId, tarefa_id: tarefa.id, titulo: tarefa.titulo, updates: updates.join(', '), dados, nome } }];"
       },
-      "id": "c56bcbff-494c-4398-a32b-23c34db19ad0",
+      "id": "4bd5dfb6-0ed0-46ad-ba98-187034b76230",
       "name": "Avaliar Edição",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12288,
-        1312
+        1552,
+        1808
       ]
     },
     {
@@ -1411,28 +1402,27 @@
         },
         "options": {}
       },
-      "id": "74edb0da-177e-4869-a416-462c9a3d9e33",
+      "id": "2f9c17e6-10fd-4ad3-9b62-e67fbbf7b459",
       "name": "Pode Editar?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -12096,
-        1312
+        1744,
+        1808
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE tarefas SET titulo = $1, descricao = $2, data_vencimento = $3, hora_vencimento = $4, prioridade = $5, atualizado_em = NOW() WHERE id = $6 RETURNING id, titulo, data_vencimento, hora_vencimento;",
-        "queryParameters": ["{{ $json.dados.titulo || null }}", "{{ $json.dados.descricao || null }}", "{{ $json.dados.data || null }}", "{{ $json.dados.hora || null }}", "{{ $json.dados.prioridade || 'MEDIA' }}", "{{ $json.tarefa_id }}"],
         "options": {}
       },
-      "id": "2fb8e505-e6e9-4f43-b7f0-6d5d1c506ad3",
+      "id": "1db5af38-73c3-4288-816b-84806175435b",
       "name": "DB: Editar Tarefa",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -11488,
+        2400,
         1216
       ],
       "credentials": {
@@ -1447,29 +1437,28 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = $('Parsear NLP').first().json.chatId;\nlet info = '';\nif (db.data_vencimento) { const p = db.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\nif (db.hora_vencimento) info += ` as ${db.hora_vencimento.substring(0, 5)}`;\nconst msg = `Pronto ${nome}, '${db.titulo}' atualizada${info ? ' pro dia ' + info : ''}. Confia no Tarefildo ☕`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "edf88d47-6189-45cf-8456-25c5608e7091",
+      "id": "007a0ecf-b6f9-468f-937d-1156f3a95113",
       "name": "Resposta Editou",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11280,
-        1200
+        2560,
+        1696
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' AND t.titulo ILIKE $2 ORDER BY t.criado_em DESC LIMIT 5;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ '%' + $json.dados.titulo + '%' }}"],
         "options": {}
       },
-      "id": "9c67cfee-657e-48b9-975f-72c4139af415",
+      "id": "b8d3eac5-9c51-421e-84f0-ed57013b11dd",
       "name": "DB: Buscar para Excluir",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
-        1648
+        1344,
+        2144
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1484,13 +1473,13 @@
       "parameters": {
         "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa pra excluir.`, tarefa_id: '' } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual excluir?\\n\\n${lista}\\n\\nMe fala o nome completo ou a data.`, tarefa_id: '' } }];\n}\n\nreturn [{ json: { chatId, tarefa_id: validos[0].json.id, titulo: validos[0].json.titulo, nome } }];"
       },
-      "id": "59843af1-5cb6-4a4f-984b-ad5bc695d6b5",
+      "id": "107af6f4-eb79-45de-8e9b-f35feb5444a5",
       "name": "Avaliar Exclusão",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12288,
-        1504
+        1552,
+        2000
       ]
     },
     {
@@ -1517,29 +1506,28 @@
         },
         "options": {}
       },
-      "id": "2ad25277-9140-4633-bec3-2ac25145663c",
+      "id": "a5edc01a-00f2-48ed-9f99-f30eb315dbd6",
       "name": "Pode Excluir?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -12096,
-        1504
+        1744,
+        2000
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE tarefas SET status = 'CANCELADA', atualizado_em = NOW() WHERE id = $1 RETURNING titulo;",
-        "queryParameters": ["{{ $json.tarefa_id }}"],
         "options": {}
       },
-      "id": "13d2c90a-d02a-4fd7-bc83-d1ea256a865d",
+      "id": "73fa57fc-5991-478e-b6f1-0eca55bc9fd9",
       "name": "DB: Excluir Tarefa",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -11488,
-        1408
+        2352,
+        1904
       ],
       "credentials": {
         "postgres": {
@@ -1553,25 +1541,25 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = $('Parsear NLP').first().json.chatId;\nconst msg = `${nome}, '${db.titulo}' sumiu da lista. Menos uma pra conta 💪`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "453aa819-ad5c-4499-9745-7e26e7bbd0df",
+      "id": "ef86a520-e1a0-43ba-9140-c7bbf1d9152f",
       "name": "Resposta Excluiu",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11280,
-        1392
+        2560,
+        1888
       ]
     },
     {
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst temData = data.dados?.data && data.dados.data.trim() !== '';\nconst status = temData ? 'PENDENTE' : 'AGUARDANDO_DATA';\nconst hora = data.dados?.hora || '';\nreturn [{ json: { ...data, status_tarefa: status, tem_data: temData, hora } }];"
       },
-      "id": "d4bfa0af-e26e-4abd-805d-e7f43fa4fa75",
+      "id": "5f6da960-d2c9-4d3c-bfd7-6c817d99999d",
       "name": "Tem Data?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12496,
+        1392,
         720
       ]
     },
@@ -1579,15 +1567,14 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status IN ('PENDENTE', 'AGUARDANDO_DATA') AND t.titulo ILIKE $2 LIMIT 1;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ '%' + $json.dados.titulo + '%' }}"],
         "options": {}
       },
-      "id": "e9cc01a5-7220-470d-8d09-096e10b650cf",
+      "id": "368dd5f0-d79c-43d6-97c3-458d9f36eb8d",
       "name": "DB: Verificar Duplicata",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12272,
+        1616,
         720
       ],
       "alwaysOutputData": true,
@@ -1603,12 +1590,12 @@
       "parameters": {
         "jsCode": "const state = $('Tem Data?').first().json;\nconst db = $input.first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\n\nif (db.id) {\n  let info = 'sem data';\n  if (db.data_vencimento) { const p = db.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n  if (db.hora_vencimento) info += ` as ${db.hora_vencimento.substring(0, 5)}`;\n  return [{ json: { ...state, tem_duplicata: true, duplicata_id: db.id, duplicata_titulo: db.titulo, duplicata_info: info, nome, chatId } }];\n}\n\nreturn [{ json: { ...state, tem_duplicata: false, nome, chatId } }];"
       },
-      "id": "5c34907e-ce03-4e92-b35d-293afd665973",
+      "id": "3d4d25ab-fadb-41e8-8a88-efad14889fca",
       "name": "Avaliar Duplicata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12032,
+        1856,
         704
       ]
     },
@@ -1637,12 +1624,12 @@
         },
         "options": {}
       },
-      "id": "d1d53fb9-d540-4d58-a995-53e678362a44",
+      "id": "8969d6fd-c3bc-4ca8-9f57-506f2072d7a2",
       "name": "Tem Duplicata?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.1,
       "position": [
-        -11840,
+        2048,
         704
       ]
     },
@@ -1650,28 +1637,27 @@
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst nome = data.nome;\nconst chatId = data.chatId;\nconst msg = `${nome}, ja tem '${data.duplicata_titulo}' pro dia ${data.duplicata_info}. Quer criar outra mesmo? Responde 'sim criar' ou 'editar' ou 'cancelar'.`;\n\n// Salvar estado no workflow\nconst globalState = $getWorkflowStaticData('global');\nglobalState['dup_' + data.whatsapp_id] = JSON.stringify({ dados: data.dados, status_tarefa: data.status_tarefa, tem_data: data.tem_data, hora: data.hora, duplicata_id: data.duplicata_id });\n\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "52318c0e-a1b1-4607-bb0a-efb6e08586fd",
+      "id": "d1f4db9a-830a-4b07-9ecc-2d7f4b71cf57",
       "name": "Perguntar Duplicata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11568,
-        528
+        2240,
+        432
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO tarefas (usuario_id, titulo, descricao, data_vencimento, hora_vencimento, status, criado_em) SELECT u.id, $1, $2, $3, $4, $5, NOW() FROM usuarios u WHERE u.whatsapp_id = $6 RETURNING id, titulo, data_vencimento, hora_vencimento, status;",
-        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.dados.descricao || '' }}", "{{ $json.tem_data ? $json.dados.data : null }}", "{{ $json.hora || null }}", "{{ $json.status_tarefa }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "094514a2-0c1b-4f5b-8f18-922e4a5909a6",
+      "id": "9ed7a2b1-3726-44c8-9505-1e8a1b5f779e",
       "name": "DB: Adicionar Tarefa",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -11568,
+        2320,
         720
       ],
       "credentials": {
@@ -1686,12 +1672,12 @@
       "parameters": {
         "jsCode": "const db = $input.first().json;\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nlet msg;\nif (db.status === 'AGUARDANDO_DATA') { msg = `Anotado, ${nome}: '${db.titulo}'. Me fala a data 👀`; }\nelse { let df=''; if (db.data_vencimento) { const p=db.data_vencimento.split('T')[0].split('-'); df=`${p[2]}/${p[1]}/${p[0]}`; } const h=db.hora_vencimento?db.hora_vencimento.substring(0,5):''; if(df&&h) msg=`${nome}, '${db.titulo}' pro dia ${df} as ${h}. Confia no Tarefildo 😄`; else if(df) msg=`${nome}, '${db.titulo}' pro dia ${df}. Eu te lembro.`; else msg=`'${db.titulo}' anotado, ${nome}. Bora resolver.`; }\nreturn [{ json: { chatId: state.chatId, mensagem: msg } }];"
       },
-      "id": "fe9147f0-4fc8-41f6-bd1b-db904896ab74",
+      "id": "fa449a82-8cad-4a31-849f-eef0427e8a4c",
       "name": "Resposta Tarefa",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11344,
+        2544,
         704
       ]
     },
@@ -1699,15 +1685,14 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento, t.prioridade FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' ORDER BY CASE WHEN t.prioridade = 'ALTA' THEN 1 WHEN t.prioridade = 'MEDIA' THEN 2 ELSE 3 END ASC, t.data_vencimento ASC NULLS LAST LIMIT 20;",
-        "queryParameters": ["{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "7e7c835d-fdbf-4c15-bdca-2100c7a8fbb9",
+      "id": "a13c5587-b1d3-4291-b96c-5bf46af6d4db",
       "name": "DB: Listar Tarefas",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
+        1392,
         896
       ],
       "alwaysOutputData": true,
@@ -1723,15 +1708,14 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "UPDATE tarefas SET status = 'CONCLUIDA', atualizado_em = NOW() WHERE id = $1 AND usuario_id = (SELECT id FROM usuarios WHERE whatsapp_id = $2) RETURNING titulo;",
-        "queryParameters": ["{{ $json.dados.id }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "de491213-287b-4fb8-9755-dafa6f2d7ba0",
+      "id": "0927263c-a4a9-4caf-897e-bd48833b1246",
       "name": "DB: Concluir Tarefa",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
+        1392,
         1040
       ],
       "alwaysOutputData": true,
@@ -1747,15 +1731,14 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, $1, $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
-        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.dados.hora || '08:00' }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "997142b6-98fc-4ed6-a450-0200217ffb5f",
+      "id": "b9d50dda-57e8-40fd-b40e-a45f1208e6fd",
       "name": "DB: Adicionar Lembrete",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
+        1392,
         1168
       ],
       "credentials": {
@@ -1770,16 +1753,15 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT l.id, l.titulo, l.hora FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE u.whatsapp_id = $1 AND l.ativo = true ORDER BY l.hora;",
-        "queryParameters": ["{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "5e8694ef-95df-456a-8f2f-e7c4fec6dd63",
+      "id": "581cc675-9013-435f-ac0f-5be415c1aac8",
       "name": "DB: Listar Lembretes",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
-        1312
+        1344,
+        1808
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1794,12 +1776,12 @@
       "parameters": {
         "jsCode": "const intent = $('Parsear NLP').first().json.intent;\nconst chatId = $('Parsear NLP').first().json.chatId;\nconst resposta_nlp = $('Parsear NLP').first().json.resposta;\nconst dados = $('Parsear NLP').first().json.dados || {};\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst items = $input.all();\nlet msg;\nswitch(intent) {\n  case 'listar_tarefas': { const v = items.filter(i => i.json?.titulo); if (v.length === 0) { msg = `Lista limpa, ${nome}. Confia no Tarefildo 🤨`; } else { const lista = v.map((i, idx) => { let info=''; if(i.json.data_vencimento){const p=i.json.data_vencimento.split('T')[0].split('-');info=`${p[2]}/${p[1]}/${p[0]}`;} else {info='sem data';} if(i.json.hora_vencimento) info+=` as ${i.json.hora_vencimento.substring(0,5)}`; return `${idx+1}. ${i.json.titulo} — ${info}`; }).join('\\n'); msg = `${nome}, ${v.length} pendencia${v.length>1?'s':''} no radar:\\n\\n${lista}\\n\\nNao deixa virar bola de neve 👀`; } break; }\n  case 'concluir_tarefa': { const t=items[0]?.json?.titulo; msg=t?`Ai sim, ${nome}! '${t}' riscada 💪`:`Nao achei, ${nome}. Me fala o nome.`; break; }\n  case 'adicionar_lembrete': { const t=items[0]?.json?.titulo||dados.titulo||'lembrete'; const h=items[0]?.json?.hora||dados.hora||''; msg=h?`${nome}, lembrete '${t}' as ${h} anotado 😄`:`${nome}, lembrete '${t}' salvo. Me passa o horario.`; break; }\n  case 'listar_lembretes': { const v=items.filter(i=>i.json?.titulo); if(v.length===0){msg=`Zero lembretes, ${nome} 😬`;} else { const lista=v.map((i,idx)=>`${idx+1}. ${i.json.titulo} — ${i.json.hora}`).join('\\n'); msg=`${nome}, seus lembretes:\\n\\n${lista}\\n\\nConfia no Tarefildo.`; } break; }\n  case 'ajuda': { msg=`Fala ${nome}, Tarefildo na area ☕\\n\\n- 'adiciona tarefa...'\\n- 'minhas tarefas'\\n- 'conclui tarefa...'\\n- 'me lembra de...'\\n- 'meus lembretes'`; break; }\n  default: { msg = resposta_nlp || `Fala ${nome}, Tarefildo na area ☕`; }\n}\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "fb10a18c-d3cb-4648-a116-9b5ff4a2ee7d",
+      "id": "bac7759c-5878-4443-8e11-8c581f73e6ba",
       "name": "Formatar Resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12272,
+        1616,
         896
       ]
     },
@@ -1807,16 +1789,15 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT titulo, COUNT(*)::int as qtd, array_agg(id ORDER BY criado_em DESC) as ids FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' GROUP BY titulo HAVING COUNT(*) > 1;",
-        "queryParameters": ["{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "55eb134d-6c03-4a64-a813-723b26a93b08",
+      "id": "6fef07b2-a036-4cc9-b04e-638697087da1",
       "name": "DB: Buscar Duplicatas",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
-        2048
+        1344,
+        2544
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1831,29 +1812,28 @@
       "parameters": {
         "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst validos = items.filter(i => i.json?.titulo);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, ta tudo limpo. Nenhuma duplicata 👍` } }];\n}\n\nconst lista = validos.map((i, idx) => `• '${i.json.titulo}' — ${i.json.qtd}x`).join('\\n');\nconst total = validos.reduce((acc, i) => acc + (i.json.qtd - 1), 0);\nconst msg = `${nome}, achei duplicatas:\\n\\n${lista}\\n\\n${total} tarefa${total > 1 ? 's' : ''} extra${total > 1 ? 's' : ''}. Quer limpar? Manda 'limpar duplicatas' que eu resolvo ☕`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "98e4f535-4a1f-4cad-a6ec-a0e6048062a3",
+      "id": "cbba2573-14cf-4b05-adf7-87a8199bf228",
       "name": "Formatar Duplicatas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12288,
-        1904
+        1552,
+        2400
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "WITH duplicatas AS ( SELECT id, titulo, ROW_NUMBER() OVER (PARTITION BY titulo ORDER BY criado_em DESC) as rn FROM tarefas WHERE usuario_id = (SELECT id FROM usuarios WHERE whatsapp_id = $1) AND status = 'PENDENTE' ) UPDATE tarefas SET status = 'CANCELADA', atualizado_em = NOW() WHERE id IN (SELECT id FROM duplicatas WHERE rn > 1) RETURNING titulo;",
-        "queryParameters": ["{{ $json.whatsapp_id }}"],
         "options": {}
       },
-      "id": "31ab7e2c-66b2-469e-b413-1212ef7bec00",
+      "id": "e2c45a54-c88d-4f97-bd50-4c68c9a8198c",
       "name": "DB: Limpar Duplicatas",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12496,
-        2256
+        1344,
+        2752
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1868,42 +1848,41 @@
       "parameters": {
         "jsCode": "const items = $input.all();\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = $('Parsear NLP').first().json.chatId;\nconst removidas = items.filter(i => i.json?.titulo);\n\nif (removidas.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao tinha duplicata pra limpar. Ta tudo certo 👍` } }];\n}\n\nconst titulos = [...new Set(removidas.map(i => i.json.titulo))];\nconst lista = titulos.map(t => `• '${t}'`).join('\\n');\nconst msg = `${nome}, removi ${removidas.length} tarefa${removidas.length > 1 ? 's' : ''} duplicada${removidas.length > 1 ? 's' : ''}:\\n\\n${lista}\\n\\nFicou so uma de cada. Menos bagunca ☕`;\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "071960aa-3e61-4b90-8bac-0e219fba588b",
+      "id": "6b516c78-6bda-4751-8730-e7424afc6601",
       "name": "Resposta Limpeza",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12288,
-        2112
+        1552,
+        2608
       ]
     },
     {
       "parameters": {
         "jsCode": "const state = $input.first().json;\nconst dados = state.dados || {};\nconst hoje = new Date().toISOString().split('T')[0];\nconst d = new Date();\n\nlet dataInicio = '';\nlet dataFim = '';\nconst periodo = (dados.periodo || 'tudo').toLowerCase();\n\nif (periodo === 'hoje') {\n  dataInicio = hoje;\n  dataFim = hoje;\n} else if (periodo === 'semana') {\n  const seg = new Date(d); seg.setDate(d.getDate() - d.getDay() + 1);\n  const dom = new Date(seg); dom.setDate(seg.getDate() + 6);\n  dataInicio = seg.toISOString().split('T')[0];\n  dataFim = dom.toISOString().split('T')[0];\n} else if (periodo === 'semana_passada') {\n  const seg = new Date(d); seg.setDate(d.getDate() - d.getDay() - 6);\n  const dom = new Date(seg); dom.setDate(seg.getDate() + 6);\n  dataInicio = seg.toISOString().split('T')[0];\n  dataFim = dom.toISOString().split('T')[0];\n} else if (periodo === 'mes') {\n  dataInicio = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;\n  const ultimo = new Date(d.getFullYear(), d.getMonth()+1, 0);\n  dataFim = ultimo.toISOString().split('T')[0];\n} else if (periodo === 'mes_passado') {\n  const mp = new Date(d.getFullYear(), d.getMonth()-1, 1);\n  dataInicio = mp.toISOString().split('T')[0];\n  const ultimo = new Date(d.getFullYear(), d.getMonth(), 0);\n  dataFim = ultimo.toISOString().split('T')[0];\n} else if (periodo === 'proxima_semana' || periodo === 'semana_que_vem') {\n  const proxSeg = new Date(d); proxSeg.setDate(d.getDate() - d.getDay() + 8);\n  const proxDom = new Date(proxSeg); proxDom.setDate(proxSeg.getDate() + 6);\n  dataInicio = proxSeg.toISOString().split('T')[0];\n  dataFim = proxDom.toISOString().split('T')[0];\n} else if (periodo === 'amanha') {\n  const amanha = new Date(d); amanha.setDate(d.getDate() + 1);\n  dataInicio = amanha.toISOString().split('T')[0];\n  dataFim = dataInicio;\n} else if (periodo === 'ontem') {\n  const ontem = new Date(d); ontem.setDate(d.getDate() - 1);\n  dataInicio = ontem.toISOString().split('T')[0];\n  dataFim = dataInicio;\n}\n\nconst statusFiltro = (dados.status_filtro || 'todos').toUpperCase();\nconst termo = dados.termo || '';\n\nlet where = \"u.whatsapp_id = '\" + state.whatsapp_id + \"'\";\nif (dataInicio && dataFim) where += ` AND t.data_vencimento BETWEEN '${dataInicio}' AND '${dataFim}'`;\nif (statusFiltro !== 'TODOS') where += ` AND t.status = '${statusFiltro}'`;\nif (termo) where += ` AND t.titulo ILIKE '%${termo}%'`;\n\nconst query = `SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento, t.status FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE ${where} ORDER BY t.data_vencimento ASC NULLS LAST LIMIT 20;`;\n\nreturn [{ json: { ...state, query_busca: query } }];"
       },
-      "id": "688088c4-ef46-4029-b1d9-aeeed81da3e2",
+      "id": "90a15bc6-cde9-4984-a3cb-a7f1929f673c",
       "name": "Preparar Busca",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12496,
-        1856
+        1344,
+        2352
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT id, titulo, data_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' AND t.titulo ILIKE $2 ORDER BY CASE WHEN t.prioridade = 'ALTA' THEN 1 WHEN t.prioridade = 'MEDIA' THEN 2 ELSE 3 END ASC, t.data_vencimento ASC LIMIT 20;",
-        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ '%' + $json.termo_busca + '%' }}"],
         "options": {}
       },
-      "id": "504f7f9a-3206-4e9d-8bee-68b3e5986c37",
+      "id": "47593631-7145-4ae2-9c47-74f776aca998",
       "name": "DB: Busca Natural",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -12288,
-        1728
+        1552,
+        2224
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -1918,13 +1897,13 @@
       "parameters": {
         "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst dados = state.dados || {};\nconst validos = items.filter(i => i.json?.titulo);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei nada nesse periodo. Ou voce tava de folga ou esqueceu de anotar 🤨` } }];\n}\n\nconst statusEmoji = { 'PENDENTE': '⏳', 'CONCLUIDA': '✅', 'CANCELADA': '❌', 'AGUARDANDO_DATA': '📅', 'VENCIDA': '⚠️' };\n\nconst lista = validos.map((i, idx) => {\n  const t = i.json;\n  let info = 'sem data';\n  if (t.data_vencimento) { const p = t.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n  if (t.hora_vencimento) info += ` as ${t.hora_vencimento.substring(0, 5)}`;\n  const emoji = statusEmoji[t.status] || '';\n  return `${idx+1}. ${emoji} ${t.titulo} — ${info}`;\n}).join('\\n');\n\nconst concluidas = validos.filter(i => i.json.status === 'CONCLUIDA').length;\nconst pendentes = validos.filter(i => i.json.status === 'PENDENTE').length;\n\nlet resumo = '';\nif (concluidas > 0 && pendentes > 0) {\n  resumo = `\\n\\n✅ ${concluidas} concluida${concluidas > 1 ? 's' : ''} | ⏳ ${pendentes} pendente${pendentes > 1 ? 's' : ''}`;\n}\n\nlet msg = `${nome}, achei ${validos.length} resultado${validos.length > 1 ? 's' : ''}:\\n\\n${lista}${resumo}`;\n\nif (pendentes > 3) msg += '\\n\\nIsso aqui ja era pra ontem hein 😬';\nelse if (pendentes === 0 && concluidas > 0) msg += '\\n\\nMandou bem, tudo resolvido 💪';\n\nreturn [{ json: { chatId, mensagem: msg } }];"
       },
-      "id": "3d03bc1d-bda1-43e4-94d5-a1a52e151df3",
+      "id": "1f2a91e9-49b2-4e02-a643-c93abf5aa79a",
       "name": "Formatar Busca",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12096,
-        1696
+        1744,
+        2192
       ]
     },
     {
@@ -1942,16 +1921,18 @@
               "operator": "equals",
               "rightValue": "TELEGRAM"
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "k1l2m3n4-o5p6-q7r8-s9t0-u1v2w3x4y5z6",
+      "id": "0b435850-d4f6-4c03-aa40-ffa647cce070",
       "name": "Route to Channel?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -10600,
-        100
+        3168,
+        512
       ]
     },
     {
@@ -1960,13 +1941,13 @@
         "text": "={{ $json.mensagem }}",
         "additionalFields": {}
       },
-      "id": "aadc4efe-2007-4d3c-b82d-61a5218c6cc4",
+      "id": "655df800-df56-419e-902a-2632f03f78a5",
       "name": "Enviar Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -10400,
-        -50
+        3552,
+        352
       ],
       "webhookId": "5946ce54-7c3b-4ad7-aa98-b835ae566337",
       "credentials": {
@@ -1980,17 +1961,15 @@
       "parameters": {
         "resource": "Chatting",
         "operation": "Send Message",
-        "participant": "={{ $json.whatsapp_id }}",
-        "messageContent": "={{ $json.mensagem }}",
         "requestOptions": {}
       },
-      "id": "m5n6o7p8-q9r0-s1t2-u3v4-w5x6y7z8a9b0",
+      "id": "8b6984db-216e-4bb4-8fad-ffbd48f9bc1a",
       "name": "Enviar WhatsApp",
       "type": "@devlikeapro/n8n-nodes-waha.WAHA",
       "typeVersion": 202409,
       "position": [
-        -10400,
-        150
+        3552,
+        608
       ],
       "credentials": {
         "wahaApi": {
@@ -2101,12 +2080,6 @@
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Ignorar (Rate Limit)": {
-      "main": [
-        [
         ]
       ]
     },
@@ -3081,22 +3054,13 @@
   "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false
+    "binaryMode": "separate"
   },
-  "versionId": "b0806dbd-c715-4ba8-bc58-4f92e2ca8715",
+  "versionId": "31826a0a-edc4-49d0-898b-39eefadeea68",
   "meta": {
-    "templateCredsSetupCompleted": true,
     "instanceId": "5615ccd35b5f25f57ae9b9aad4dc517f67a024d48d00eeba11ff2b0a007a15b0"
   },
   "nodeGroups": [],
-  "id": "uX8hYA73wRZTl3kn",
-  "tags": [
-    {
-      "name": "automacao",
-      "id": "bWTadWrGfkG25cyF",
-      "updatedAt": "2026-06-24T16:49:00.367Z",
-      "createdAt": "2026-06-24T16:49:00.367Z"
-    }
-  ]
+  "id": "jSAttXqwesQLiTet",
+  "tags": []
 }
