@@ -1893,7 +1893,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.source }}",
+                    "leftValue": "={{ $('Filtrar Mensagem').first().json.source }}",
                     "rightValue": "TELEGRAM",
                     "operator": {
                       "type": "string",
@@ -1918,7 +1918,7 @@
                 "conditions": [
                   {
                     "id": "2e56b536-b8f4-4062-bace-009bd0ee5af5",
-                    "leftValue": "={{ $json.source }}",
+                    "leftValue": "={{ $('Filtrar Mensagem').first().json.source }}",
                     "rightValue": "WHATSAPP",
                     "operator": {
                       "type": "string",
