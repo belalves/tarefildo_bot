@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "PowerShell(grep -v queryParameters)",
-      "PowerShell(head -5)"
+      "PowerShell(head -5)",
+      "PowerShell(cd \"c:\\\\Projetos\\\\Bot\"; \\(Get-Content tarefildo_unified.json | ConvertFrom-Json\\) | Out-Null; Write-Host \"✅ JSON válido - Arquivo unificado pronto!\" -ForegroundColor Green)"
     ]
   }
 }
