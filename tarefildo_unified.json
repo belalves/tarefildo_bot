@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json;\n\n// Detectar origem da mensagem\nlet source = null;\nif (body.message?.from?.id) {\n  source = 'TELEGRAM';\n} else if (body.payload?.from || body.from) {\n  source = 'WHATSAPP';\n}\n\nif (!source) return []; // Ignorar se origem desconhecida\n\nreturn [{ json: { source, raw: body } }];"
+        "jsCode": "const body = $input.first().json;\n\n// DEBUG: Log do payload\nconsole.log('Webhook payload:', JSON.stringify(body).substring(0, 500));\n\n// Detectar origem da mensagem\nlet source = null;\n\n// Telegram: { update_id: N, message: { ... } }\nif (body.message && body.message.from && body.message.from.id) {\n  source = 'TELEGRAM';\n  console.log('Detectado: TELEGRAM');\n}\n// WhatsApp (WAHA): { payload: { from: '...', ... } }\nelse if (body.payload && body.payload.from) {\n  source = 'WHATSAPP';\n  console.log('Detectado: WHATSAPP');\n}\n\nif (!source) {\n  console.log('AVISO: Nenhuma origem detectada. Payload:', Object.keys(body));\n  return [];\n}\n\nreturn [{ json: { source, raw: body } }];"
       },
       "id": "f310dadd-bf1a-43de-941a-cc93bc27e02a",
       "name": "Detect Source",
