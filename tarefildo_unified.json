@@ -1399,9 +1399,21 @@
     },
     {
       "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst dados = item.dados || {};\nconst sets = [];\nconst params = [];\nlet idx = 1;\n\nif (dados.novo_titulo) { sets.push(`titulo = $${idx}`); params.push(dados.novo_titulo); idx++; }\nif (dados.nova_data) { sets.push(`data_vencimento = $${idx}::date`); params.push(dados.nova_data); idx++; }\nif (dados.nova_hora) { sets.push(`hora_vencimento = $${idx}::time`); params.push(dados.nova_hora); idx++; }\nsets.push('atualizado_em = NOW()');\n\nconst whereIdx = idx;\nconst query = `UPDATE tarefas SET ${sets.join(', ')} WHERE id = $${whereIdx} RETURNING id, titulo, data_vencimento, hora_vencimento;`;\nparams.push(item.tarefa_id);\n\nreturn [{ json: { query, queryParams: params.join(','), chatId: item.chatId, nome: item.nome } }];"
+      },
+      "id": "prep-edit-query",
+      "name": "Preparar Edição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 2224]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE tarefas SET titulo = $1, descricao = $2, data_vencimento = $3, hora_vencimento = $4, prioridade = $5, atualizado_em = NOW() WHERE id = $6 RETURNING id, titulo, data_vencimento, hora_vencimento;",
-        "options": {}
+        "query": "={{ $json.query }}",
+        "options": {
+          "queryReplacement": "={{ $json.queryParams }}"
+        }
       },
       "id": "329ac71b-aaa3-4115-9930-cf99919dd597",
       "name": "DB: Editar Tarefa",
@@ -2944,7 +2956,7 @@
       "main": [
         [
           {
-            "node": "DB: Editar Tarefa",
+            "node": "Preparar Edição",
             "type": "main",
             "index": 0
           }
@@ -2952,6 +2964,17 @@
         [
           {
             "node": "Route to Channel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Edição": {
+      "main": [
+        [
+          {
+            "node": "DB: Editar Tarefa",
             "type": "main",
             "index": 0
           }
