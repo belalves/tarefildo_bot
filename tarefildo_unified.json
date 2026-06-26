@@ -5,7 +5,8 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "tarefildo",
-        "responseMode": "lastNode",
+        "responseMode": "onReceived",
+        "responseData": "noData",
         "options": {}
       },
       "id": "f184c4d4-2af2-4c98-bd24-954dea990e67",
@@ -1317,9 +1318,21 @@
     },
     {
       "parameters": {
+        "jsCode": "const item = $input.first().json;\nlet titulo = (item.dados?.titulo_atual || item.dados?.titulo || '').trim();\nconst whatsapp_id = (item.whatsapp_id || '').trim();\n\nif (titulo.length > 500) titulo = titulo.substring(0, 500);\nif (!whatsapp_id.match(/^\\d+@(c\\.us|telegram|s\\.whatsapp\\.net)$/)) {\n  return [{ json: { ...item, sem_titulo: true, erro: 'ID invalido' } }];\n}\n\nif (!titulo) {\n  const globalState = $getWorkflowStaticData('global');\n  const lastTask = globalState['last_task_' + whatsapp_id];\n  if (lastTask) {\n    try { titulo = JSON.parse(lastTask).titulo || ''; } catch(e) {}\n  }\n}\n\nif (!titulo) {\n  return [{ json: { ...item, sem_titulo: true } }];\n}\n\nreturn [{ json: { ...item, busca_titulo: '%' + titulo + '%', busca_whatsapp_id: whatsapp_id, sem_titulo: false } }];"
+      },
+      "id": "prep-busca-edicao",
+      "name": "Preparar Busca Edição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-640, 2960]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' AND t.titulo ILIKE $2 ORDER BY t.criado_em DESC LIMIT 5;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.busca_whatsapp_id }},{{ $json.busca_titulo }}"
+        }
       },
       "id": "e20ab27a-3b99-4377-b698-f5c1dfb90228",
       "name": "DB: Buscar para Editar",
@@ -1340,7 +1353,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst dados = state.dados || {};\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa. Me fala o nome certinho.` } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual dessas?\\n\\n${lista}\\n\\nMe fala o nome completo.` } }];\n}\n\nconst tarefa = validos[0].json;\nconst updates = [];\nif (dados.nova_data) updates.push(`data_vencimento = '${dados.nova_data}'`);\nif (dados.nova_hora) updates.push(`hora_vencimento = '${dados.nova_hora}'`);\nif (dados.novo_titulo) updates.push(`titulo = '${dados.novo_titulo}'`);\nupdates.push(`atualizado_em = NOW()`);\n\nreturn [{ json: { chatId, tarefa_id: tarefa.id, titulo: tarefa.titulo, updates: updates.join(', '), dados, nome } }];"
+        "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst prepBusca = $('Preparar Busca Edição').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst dados = state.dados || {};\n\nif (prepBusca.sem_titulo) {\n  return [{ json: { chatId, mensagem: `${nome}, qual tarefa quer editar? Me fala o nome.`, tarefa_id: '' } }];\n}\n\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa. Me fala o nome certinho.`, tarefa_id: '' } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual dessas?\\n\\n${lista}\\n\\nMe fala o nome completo.`, tarefa_id: '' } }];\n}\n\nconst tarefa = validos[0].json;\nconst updates = [];\nif (dados.nova_data) updates.push(`data_vencimento = '${dados.nova_data}'`);\nif (dados.nova_hora) updates.push(`hora_vencimento = '${dados.nova_hora}'`);\nif (dados.novo_titulo) updates.push(`titulo = '${dados.novo_titulo}'`);\nupdates.push(`atualizado_em = NOW()`);\n\nreturn [{ json: { chatId, tarefa_id: tarefa.id, titulo: tarefa.titulo, updates: updates.join(', '), dados, nome } }];"
       },
       "id": "ebab645c-fc88-43ea-a7f6-413245e0eacc",
       "name": "Avaliar Edição",
@@ -1421,9 +1434,21 @@
     },
     {
       "parameters": {
+        "jsCode": "const item = $input.first().json;\nlet titulo = (item.dados?.titulo || item.dados?.titulo_atual || '').trim();\nconst whatsapp_id = (item.whatsapp_id || '').trim();\n\nif (titulo.length > 500) titulo = titulo.substring(0, 500);\nif (!whatsapp_id.match(/^\\d+@(c\\.us|telegram|s\\.whatsapp\\.net)$/)) {\n  return [{ json: { ...item, sem_titulo: true, erro: 'ID invalido' } }];\n}\n\nif (!titulo) {\n  const globalState = $getWorkflowStaticData('global');\n  const lastTask = globalState['last_task_' + whatsapp_id];\n  if (lastTask) {\n    try { titulo = JSON.parse(lastTask).titulo || ''; } catch(e) {}\n  }\n}\n\nif (!titulo) {\n  return [{ json: { ...item, sem_titulo: true } }];\n}\n\nreturn [{ json: { ...item, busca_titulo: '%' + titulo + '%', busca_whatsapp_id: whatsapp_id, sem_titulo: false } }];"
+      },
+      "id": "prep-busca-exclusao",
+      "name": "Preparar Busca Exclusão",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-640, 3152]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' AND t.titulo ILIKE $2 ORDER BY t.criado_em DESC LIMIT 5;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.busca_whatsapp_id }},{{ $json.busca_titulo }}"
+        }
       },
       "id": "0956b4c0-89f3-4e33-a421-722c03743284",
       "name": "DB: Buscar para Excluir",
@@ -1444,7 +1469,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa pra excluir.`, tarefa_id: '' } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual excluir?\\n\\n${lista}\\n\\nMe fala o nome completo ou a data.`, tarefa_id: '' } }];\n}\n\nreturn [{ json: { chatId, tarefa_id: validos[0].json.id, titulo: validos[0].json.titulo, nome } }];"
+        "jsCode": "const items = $input.all();\nconst state = $('Parsear NLP').first().json;\nconst prepBusca = $('Preparar Busca Exclusão').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = state.chatId;\n\nif (prepBusca.sem_titulo) {\n  return [{ json: { chatId, mensagem: `${nome}, qual tarefa quer excluir? Me fala o nome.`, tarefa_id: '' } }];\n}\n\nconst validos = items.filter(i => i.json?.id);\n\nif (validos.length === 0) {\n  return [{ json: { chatId, mensagem: `${nome}, nao achei essa tarefa pra excluir.`, tarefa_id: '' } }];\n}\n\nif (validos.length > 1) {\n  const lista = validos.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) { const p = i.json.data_vencimento.split('T')[0].split('-'); info = `${p[2]}/${p[1]}/${p[0]}`; }\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n  return [{ json: { chatId, mensagem: `${nome}, achei mais de uma. Qual excluir?\\n\\n${lista}\\n\\nMe fala o nome completo.`, tarefa_id: '' } }];\n}\n\nreturn [{ json: { chatId, tarefa_id: validos[0].json.id, titulo: validos[0].json.titulo, nome } }];"
       },
       "id": "35e8d543-0697-4532-92b7-90369b7df181",
       "name": "Avaliar Exclusão",
@@ -1643,7 +1668,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const db = $input.first().json;\nconst state = $('Parsear NLP').first().json;\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nlet msg;\nif (db.status === 'AGUARDANDO_DATA') { msg = `Anotado, ${nome}: '${db.titulo}'. Me fala a data 👀`; }\nelse { let df=''; if (db.data_vencimento) { const p=db.data_vencimento.split('T')[0].split('-'); df=`${p[2]}/${p[1]}/${p[0]}`; } const h=db.hora_vencimento?db.hora_vencimento.substring(0,5):''; if(df&&h) msg=`${nome}, '${db.titulo}' pro dia ${df} as ${h}. Confia no Tarefildo 😄`; else if(df) msg=`${nome}, '${db.titulo}' pro dia ${df}. Eu te lembro.`; else msg=`'${db.titulo}' anotado, ${nome}. Bora resolver.`; }\nreturn [{ json: { chatId: state.chatId, mensagem: msg } }];"
+        "jsCode": "const db = $input.first().json;\nconst state = $('Parsear NLP').first().json;\nconst filtro = $('Filtrar Mensagem').first().json;\nconst nome = filtro.nome || 'chefe';\nconst whatsapp_id = filtro.whatsapp_id || state.whatsapp_id || '';\n\n// Salvar contexto da ultima tarefa (Guide §2.3)\nif (db.id && db.titulo) {\n  const globalState = $getWorkflowStaticData('global');\n  globalState['last_task_' + whatsapp_id] = JSON.stringify({ id: db.id, titulo: db.titulo, timestamp: Date.now() });\n  for (const k of Object.keys(globalState)) {\n    if (k.startsWith('last_task_') && Date.now() - (JSON.parse(globalState[k] || '{}').timestamp || 0) > 86400000) delete globalState[k];\n  }\n}\n\nlet msg;\nif (db.status === 'AGUARDANDO_DATA') { msg = `Anotado, ${nome}: '${db.titulo}'. Me fala a data 👀`; }\nelse { let df=''; if (db.data_vencimento) { const p=db.data_vencimento.split('T')[0].split('-'); df=`${p[2]}/${p[1]}/${p[0]}`; } const h=db.hora_vencimento?db.hora_vencimento.substring(0,5):''; if(df&&h) msg=`${nome}, '${db.titulo}' pro dia ${df} as ${h}. Confia no Tarefildo 😄`; else if(df) msg=`${nome}, '${db.titulo}' pro dia ${df}. Eu te lembro.`; else msg=`'${db.titulo}' anotado, ${nome}. Bora resolver.`; }\nreturn [{ json: { chatId: state.chatId, mensagem: msg } }];"
       },
       "id": "f7ddf912-6006-4769-91ce-0c3d6febc9a0",
       "name": "Resposta Tarefa",
@@ -2678,14 +2703,14 @@
         ],
         [
           {
-            "node": "DB: Buscar para Editar",
+            "node": "Preparar Busca Edição",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "DB: Buscar para Excluir",
+            "node": "Preparar Busca Exclusão",
             "type": "main",
             "index": 0
           }
@@ -2859,6 +2884,17 @@
         ]
       ]
     },
+    "Preparar Busca Edição": {
+      "main": [
+        [
+          {
+            "node": "DB: Buscar para Editar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "DB: Buscar para Editar": {
       "main": [
         [
@@ -2915,6 +2951,17 @@
         [
           {
             "node": "Route to Channel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Busca Exclusão": {
+      "main": [
+        [
+          {
+            "node": "DB: Buscar para Excluir",
             "type": "main",
             "index": 0
           }
