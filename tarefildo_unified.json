@@ -1671,7 +1671,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO tarefas (usuario_id, titulo, descricao, data_vencimento, hora_vencimento, status, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), NULLIF($2,'__NULL__'), NULLIF($3,'__NULL__')::date, NULLIF($4,'__NULL__')::time, $5, NOW() FROM usuarios u WHERE u.whatsapp_id = $6 RETURNING id, titulo, data_vencimento, hora_vencimento, status;",
         "options": {
-          "queryReplacement": "={{ $json.p1 }},={{ $json.p2 }},={{ $json.p3 }},={{ $json.p4 }},={{ $json.p5 }},={{ $json.p6 }}"
+          "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }},{{ $json.p4 }},{{ $json.p5 }},{{ $json.p6 }}"
         }
       },
       "id": "948f13de-5308-472e-9fd7-7dadab6eb0f0",
@@ -1764,7 +1764,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
         "options": {
-          "queryReplacement": "={{ $json.p1 }},={{ $json.p2 }},={{ $json.p3 }}"
+          "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }}"
         }
       },
       "id": "pular-db-lembrete",
@@ -1794,7 +1794,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
         "options": {
-          "queryReplacement": "={{ $json.p1 }},={{ $json.p2 }},={{ $json.p3 }}"
+          "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }}"
         }
       },
       "id": "25323264-9669-416c-915b-1f91a8495410",
