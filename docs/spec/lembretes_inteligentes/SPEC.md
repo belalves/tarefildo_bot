@@ -1,15 +1,32 @@
-# SPEC — Lembretes Inteligentes com Envio no Horário
+# SPEC — Lembretes Inteligentes com Envio Sob Demanda
 
 **Data:** 2026-06-26  
 **Status:** Pendente  
 **Prioridade:** Alta  
-**Alinhamento:** [N8N_DEVELOPMENT_GUIDE.md](../../N8N_DEVELOPMENT_GUIDE.md) — Seções 2.1, 3.1, 5 (Scheduled Tasks)
+**Alinhamento:** [N8N_DEVELOPMENT_GUIDE.md](../../N8N_DEVELOPMENT_GUIDE.md) — Seções 2.1, 3.1, 1.4
 
 ---
 
 ## Objetivo
 
-Quando o usuário criar um lembrete com horário (ex: "me lembra de tomar remédio às 8h"), o sistema deve enviar a mensagem no horário exato, não apenas listar no dashboard.
+Quando o usuário criar um lembrete com horário, o sistema deve enviar a mensagem no horário exato usando o nó **Wait** do n8n — sem scheduler adicional, zero custo extra.
+
+---
+
+## Abordagem: Sob Demanda com Wait Node
+
+Em vez de um scheduler rodando periodicamente (caro), o lembrete é agendado **no momento da criação** usando o nó `Wait` do n8n que pausa a execução até o horário exato e então envia.
+
+```
+Usuário: "me lembra de tomar remédio amanhã às 8h"
+  → Salva lembrete no banco
+  → Calcula tempo de espera (agora → amanhã 8h)
+  → Nó Wait: pausa até o horário
+  → Envia mensagem no horário exato
+  → Marca como enviado no banco
+```
+
+**Custo:** 0 execuções extras. A execução fica "dormindo" no n8n até o horário.
 
 ---
 
@@ -17,149 +34,87 @@ Quando o usuário criar um lembrete com horário (ex: "me lembra de tomar reméd
 
 ```
 Usuário: "me lembra de tomar remédio às 8h"
-  → DeepSeek: intent=adicionar_lembrete, dados={titulo:"tomar remédio", hora:"08:00"}
-  → DB: INSERT INTO lembretes (titulo, hora, ativo) → salva
-  → Resposta: "Lembrete anotado!"
-  → ... e nunca mais acontece nada
+  → Salva → Responde → ... nunca mais acontece nada
 ```
 
-## Fluxo Esperado
+## Fluxo Novo
 
 ```
-Usuário: "me lembra de tomar remédio às 8h"
-  → Salva lembrete no banco com hora
-  → Resposta: "Lembrete anotado! Te aviso às 08:00"
-  
-[Às 08:00 do dia seguinte e todos os dias]
-  → Scheduler verifica lembretes ativos para este horário
-  → Envia: "🔔 Ei Isabela, hora de: tomar remédio! Confia no Tarefildo."
+Usuário: "me lembra de tomar remédio amanhã às 8h"
+    ↓
+[1] Preparar Insert Lembrete
+    - Valida: tem título? tem hora?
+    - Calcula agendado_para (data + hora)
+    ↓
+[2] DB: Adicionar Lembrete
+    - INSERT com titulo, hora, agendado_para, ativo
+    ↓
+[3] Resposta ao usuário
+    - "Lembrete anotado! Te aviso amanhã às 08:00 ☕"
+    ↓
+[4] Route to Channel → Envia confirmação
+    ↓
+[5] Wait Node
+    - Pausa até: agendado_para (datetime exato)
+    ↓
+[6] DB: Verificar se ainda ativo
+    - SELECT ativo FROM lembretes WHERE id = $1
+    - Se desativado pelo usuário → para
+    ↓
+[7] Formatar Lembrete
+    - "🔔 Isabela, hora de: tomar remédio! Confia no Tarefildo."
+    ↓
+[8] Route to Channel → Envia lembrete
+    ↓
+[9] DB: Marcar Enviado
+    - UPDATE ultimo_envio = NOW()
+    - Se não recorrente: ativo = false
+    ↓
+[10] Se recorrente → Reagendar
+    - Calcula próximo horário (+24h)
+    - Volta pro Wait Node (loop)
 ```
 
 ---
 
 ## Tipos de Lembrete
 
-| Tipo | Exemplo | Comportamento |
-|------|---------|---------------|
-| **Recorrente diário** | "me lembra de tomar remédio às 8h" | Envia todo dia às 8h |
-| **Uma vez** | "me lembra de ligar pro banco amanhã às 14h" | Envia uma vez e desativa |
-| **Vinculado a tarefa** | Tarefa com data_vencimento | Já funciona via workflow de lembretes |
+| Tipo | Exemplo | Wait | Pós-envio |
+|------|---------|------|-----------|
+| **Único** | "me lembra amanhã às 14h" | Até data+hora | Desativa |
+| **Recorrente** | "me lembra todo dia às 8h" | Até próxima 8h | Reagenda +24h |
 
 ---
 
 ## Modelo de Dados
 
-### Tabela `lembretes` (atualizada)
-
-| Coluna | Tipo | Obrigatório | Descrição |
-|--------|------|-------------|-----------|
-| id | text (UUID) | Sim | PK |
-| usuario_id | text | Sim | FK → usuarios.id |
-| tarefa_id | text | Não | FK → tarefas.id (opcional) |
-| titulo | text | Sim | "tomar remédio" |
-| hora | time | Sim | 08:00 |
-| ativo | boolean | Sim | Se está ativo |
-| recorrente | boolean | Sim | Se repete todo dia |
-| agendado_para | date | Não | Data específica (lembretes únicos) |
-| ultimo_envio | timestamptz | Não | Quando foi enviado por último |
-| enviado_em | timestamptz | Não | Legacy |
-| criado_em | timestamptz | Sim | Quando criou |
-
-### Migração SQL
+### Tabela `lembretes` (migração)
 
 ```sql
-ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS recorrente boolean DEFAULT true;
+ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS titulo text;
+ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS hora time;
+ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ativo boolean DEFAULT true;
+ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS recorrente boolean DEFAULT false;
 ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio timestamptz;
 ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS criado_em timestamptz DEFAULT NOW();
 ALTER TABLE lembretes ALTER COLUMN tarefa_id DROP NOT NULL;
 ALTER TABLE lembretes ALTER COLUMN agendado_para DROP NOT NULL;
 ```
 
----
+### Campos usados
 
-## Arquitetura do Scheduler
-
-### Workflow: "Tarefildo - Enviar Lembretes"
-
-Separado do workflow principal. Roda a cada **5 minutos** verificando lembretes pendentes.
-
-```
-Schedule Trigger (a cada 5 min)
-    ↓
-[1] DB: Buscar Lembretes Pendentes
-    SELECT l.id, l.titulo, l.hora, l.recorrente, l.agendado_para,
-           u.whatsapp_id, u.nome, u.canais_ativos
-    FROM lembretes l
-    JOIN usuarios u ON u.id = l.usuario_id
-    WHERE l.ativo = true
-    AND l.hora BETWEEN (CURRENT_TIME - INTERVAL '5 minutes') AND CURRENT_TIME
-    AND (
-      l.ultimo_envio IS NULL 
-      OR l.ultimo_envio::date < CURRENT_DATE
-    )
-    AND (
-      l.agendado_para IS NULL  -- recorrente
-      OR l.agendado_para = CURRENT_DATE  -- data específica
-    );
-    ↓
-[2] Tem Lembretes? (filtrar vazios)
-    ↓
-[3] Formatar Mensagens (Code)
-    Para cada lembrete:
-      msg = "🔔 {nome}, hora de: {titulo}! Confia no Tarefildo."
-    Detectar canal (telegram/@c.us)
-    ↓
-[4] Route to Channel (Telegram ou WhatsApp)
-    ↓
-[5] DB: Marcar Enviado
-    UPDATE lembretes 
-    SET ultimo_envio = NOW()
-    WHERE id = $1;
-    
-    -- Se não recorrente, desativar
-    UPDATE lembretes 
-    SET ativo = false 
-    WHERE id = $1 AND recorrente = false;
-```
-
-### Lógica de Envio
-
-| Cenário | Query | Ação pós-envio |
-|---------|-------|----------------|
-| Recorrente ativo | `hora` bate + `ultimo_envio` não é hoje | Atualiza `ultimo_envio` |
-| Único (data específica) | `agendado_para` = hoje + `hora` bate | Atualiza `ultimo_envio` + `ativo = false` |
-| Já enviado hoje | `ultimo_envio::date = CURRENT_DATE` | Ignora |
-| Desativado | `ativo = false` | Ignora |
-
-### Janela de Tempo
-
-O scheduler roda a cada 5 minutos. A query busca lembretes com `hora` nos últimos 5 minutos:
-
-```sql
-WHERE l.hora BETWEEN (CURRENT_TIME - INTERVAL '5 minutes') AND CURRENT_TIME
-```
-
-Isso garante que um lembrete das 08:00 será capturado entre 08:00 e 08:05.
-
-**⚠️ Timezone:** O servidor n8n (PikaPods) usa UTC. Lembretes devem ser armazenados no fuso do usuário. Como todos os usuários atuais são de Brasília (UTC-3), a query ajusta:
-
-```sql
-WHERE l.hora BETWEEN 
-  ((CURRENT_TIME AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '5 minutes') 
-  AND (CURRENT_TIME AT TIME ZONE 'America/Sao_Paulo')
-```
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| titulo | text | "tomar remédio" |
+| hora | time | 08:00 |
+| ativo | boolean | Se ainda está ativo |
+| recorrente | boolean | Se repete todo dia |
+| agendado_para | timestamptz | Data+hora exata do próximo envio |
+| ultimo_envio | timestamptz | Quando foi enviado por último |
 
 ---
 
-## Fluxo de Criação (Bot Principal)
-
-### DeepSeek — nova lógica para lembretes
-
-O prompt já suporta `adicionar_lembrete`. Adicionar ao Preparar Prompt:
-
-- Se o texto mencionar "todo dia" ou "sempre" → `recorrente = true`
-- Se mencionar data específica ("amanhã", "sexta") → `recorrente = false`, `agendado_para = data`
-- Default: `recorrente = true`
+## Implementação no Workflow Principal
 
 ### Preparar Insert Lembrete (atualizado)
 
@@ -171,94 +126,153 @@ const data = (item.dados?.data || '').trim();
 const nome = $('Filtrar Mensagem').first().json.nome || 'chefe';
 const chatId = item.chatId;
 
+// Validação
 if (!titulo) {
-  return [{ json: { chatId, mensagem: `${nome}, me fala o que quer lembrar e o horario.`, pular_db: true } }];
+  return [{ json: { chatId, mensagem: `${nome}, me fala o que quer lembrar e o horario. Tipo: 'me lembra de tomar remedio as 8h'.`, pular_db: true } }];
 }
 
 if (!hora) {
   return [{ json: { chatId, mensagem: `${nome}, anotei '${titulo}' mas preciso do horario. Que horas te lembro?`, pular_db: true } }];
 }
 
-const recorrente = !data; // Se tem data específica, não é recorrente
+// Calcular agendado_para (datetime exato)
+const agora = new Date();
+let agendadoPara;
+
+if (data) {
+  // Data específica + hora
+  agendadoPara = new Date(data + 'T' + hora + ':00-03:00'); // Brasília
+} else {
+  // Hoje ou amanhã se já passou a hora
+  const [h, m] = hora.split(':').map(Number);
+  agendadoPara = new Date();
+  agendadoPara.setHours(h + 3, m, 0, 0); // +3 para UTC
+  if (agendadoPara <= agora) {
+    agendadoPara.setDate(agendadoPara.getDate() + 1); // Amanhã
+  }
+}
+
+const recorrente = !data; // Sem data = todo dia
 
 return [{ json: {
   p1: titulo,
   p2: hora,
   p3: item.whatsapp_id,
   p4: recorrente ? 'true' : 'false',
-  p5: data || '__NULL__',
-  chatId, nome, source: item.source, whatsapp_id: item.whatsapp_id, pular_db: false
+  p5: agendadoPara.toISOString(),
+  chatId, nome, source: item.source, whatsapp_id: item.whatsapp_id,
+  pular_db: false,
+  agendado_para_iso: agendadoPara.toISOString(),
+  recorrente
 } }];
 ```
 
-### Query INSERT (atualizada)
+### Query INSERT
 
 ```sql
-INSERT INTO lembretes (usuario_id, titulo, hora, ativo, recorrente, agendado_para, criado_em) 
-SELECT u.id, $1, $2::time, true, $4::boolean, NULLIF($5,'__NULL__')::date, NOW() 
-FROM usuarios u WHERE u.whatsapp_id = $3 
-RETURNING id, titulo, hora, recorrente;
+INSERT INTO lembretes (usuario_id, titulo, hora, ativo, recorrente, agendado_para, criado_em)
+SELECT u.id, $1, $2::time, true, $4::boolean, $5::timestamptz, NOW()
+FROM usuarios u WHERE u.whatsapp_id = $3
+RETURNING id, titulo, hora, recorrente, agendado_para;
 ```
 
-### Respostas do Tarefildo
+### Após salvar → Resposta + Wait + Envio
 
-| Cenário | Resposta |
-|---------|----------|
-| Recorrente criado | `{nome}, lembrete '${titulo}' as ${hora} anotado. Te aviso todo dia nesse horario ☕` |
-| Único criado | `{nome}, lembrete '${titulo}' pra ${data} as ${hora}. Te aviso no dia!` |
-| Sem título | `{nome}, me fala o que quer lembrar e o horario.` |
-| Sem hora | `{nome}, anotei '${titulo}' mas preciso do horario. Que horas?` |
+```
+DB: Adicionar Lembrete
+    ↓
+Resposta Lembrete (confirma ao usuário)
+    ↓
+Route to Channel (envia confirmação)
+    ↓
+Wait Node (pausa até agendado_para)
+    ↓
+DB: Lembrete ainda ativo? (verifica se não foi cancelado)
+    ↓ [Se ativo]
+Formatar Lembrete (msg do Tarefildo)
+    ↓
+Route to Channel (envia lembrete)
+    ↓
+DB: Marcar Enviado (ultimo_envio + desativar se único)
+    ↓ [Se recorrente]
+Reagendar (+24h) → volta pro Wait
+```
+
+### Wait Node — Configuração
+
+```json
+{
+  "type": "n8n-nodes-base.wait",
+  "parameters": {
+    "resume": "specificTime",
+    "dateTime": "={{ $json.agendado_para_iso }}"
+  }
+}
+```
 
 ---
 
-## Listar Lembretes (atualizado)
+## Respostas do Tarefildo
 
-### Query
+| Cenário | Resposta |
+|---------|----------|
+| Recorrente criado | `{nome}, lembrete '{titulo}' as {hora} anotado. Te aviso todo dia nesse horario ☕` |
+| Único criado | `{nome}, lembrete '{titulo}' pra {data} as {hora}. Te aviso no dia!` |
+| Sem título | `{nome}, me fala o que quer lembrar e o horario.` |
+| Sem hora | `{nome}, anotei '{titulo}' mas preciso do horario.` |
+| Envio do lembrete | `🔔 {nome}, hora de: {titulo}! Confia no Tarefildo.` |
+| Lembrete cancelado antes de disparar | Não envia (verificação pré-envio) |
+
+---
+
+## Listar Lembretes
 
 ```sql
 SELECT l.id, l.titulo, l.hora, l.recorrente, l.agendado_para
-FROM lembretes l
-JOIN usuarios u ON u.id = l.usuario_id
+FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id
 WHERE u.whatsapp_id = $1 AND l.ativo = true
 ORDER BY l.hora;
 ```
 
-### Formatação
-
+Formatação:
 ```
 🔔 Seus lembretes:
-
 1. Tomar remédio — 08:00 (todo dia)
 2. Ligar pro banco — 14:00 (amanhã)
-3. Reunião — 10:00 (28/06)
 ```
 
 ---
 
-## Desativar/Excluir Lembrete
-
-Adicionar intent `excluir_lembrete` ao DeepSeek:
+## Cancelar Lembrete
 
 ```
-"excluir lembrete tomar remédio"
+"cancela lembrete tomar remédio"
   → DB: UPDATE lembretes SET ativo = false WHERE titulo ILIKE '%remédio%'
-  → "Pronto {nome}, lembrete desativado."
+  → O Wait Node verifica ativo antes de enviar → não envia
 ```
 
 ---
 
-## Nós do Workflow Scheduler
+## Vantagens sobre Scheduler
 
-| Nó | Tipo | Descrição |
-|----|------|-----------|
-| Schedule Trigger | scheduleTrigger | Cron: `0 */5 * * * *` (a cada 5 min) |
-| DB: Lembretes Pendentes | postgres | Query com timezone |
-| Tem Lembretes? | filter | titulo not empty |
-| Formatar Lembretes | code | Monta mensagem + detecta canal |
-| Route to Channel | switch | Telegram ou WhatsApp |
-| Enviar Telegram | telegram | Envia msg |
-| Enviar WhatsApp | WAHA | Envia msg |
-| DB: Marcar Enviado | postgres | UPDATE ultimo_envio + desativar se único |
+| Aspecto | Scheduler (5 min) | Sob Demanda (Wait) |
+|---------|-------------------|-------------------|
+| Execuções/dia | 288 | 0 extras |
+| Precisão | ±5 min | Exata |
+| Custo | Alto | Zero |
+| Complexidade | Workflow separado | Mesmo workflow |
+| Escalabilidade | Limitada | Cada lembrete é independente |
+
+---
+
+## Limitações do Wait Node
+
+| Limitação | Mitigação |
+|-----------|-----------|
+| Se n8n reiniciar, Waits pendentes podem perder | n8n persiste Waits no banco — sobrevive restart |
+| Muitos Waits simultâneos | n8n suporta milhares — não é problema para uso pessoal |
+| Recorrente infinito | Limitar a 30 dias, depois pedir renovação |
+| PikaPods pode ter limite de execuções pausadas | Monitorar — se necessário, migrar para scheduler 3x/dia |
 
 ---
 
@@ -266,14 +280,13 @@ Adicionar intent `excluir_lembrete` ao DeepSeek:
 
 | Cenário | Input | Esperado |
 |---------|-------|----------|
-| Lembrete recorrente | "me lembra de tomar remédio às 8h" | Salva recorrente, envia todo dia 8h |
-| Lembrete único | "me lembra de ligar pro banco amanhã às 14h" | Salva com data, envia 1x, desativa |
+| Lembrete único | "me lembra amanhã às 14h de ligar pro banco" | Salva, envia às 14h, desativa |
+| Lembrete recorrente | "me lembra de tomar remédio às 8h" | Salva, envia todo dia 8h |
 | Sem hora | "me lembra de comprar pão" | Pede horário |
 | Sem título | "adiciona lembrete" | Pede informações |
-| Listar | "meus lembretes" | Lista com tipo (todo dia / data) |
-| Excluir | "remove lembrete remédio" | Desativa |
-| Já enviado hoje | Scheduler roda 2x no mesmo horário | Não duplica |
-| Timezone | Lembrete 8h Brasília | Dispara correto em UTC |
+| Cancelar antes de disparar | "cancela lembrete remédio" → Wait verifica | Não envia |
+| Listar | "meus lembretes" | Lista com tipo |
+| Hora já passou hoje | "me lembra às 6h" (são 10h) | Agenda pra amanhã 6h |
 
 ---
 
@@ -281,21 +294,24 @@ Adicionar intent `excluir_lembrete` ao DeepSeek:
 
 | Item | Tempo |
 |------|-------|
-| Migração banco (colunas) | 5 min |
+| Migração banco | 5 min |
 | Atualizar Preparar Insert Lembrete | 15 min |
-| Criar workflow scheduler | 30 min |
+| Adicionar Wait + verificação + envio | 25 min |
+| Loop recorrente | 15 min |
 | Formatar respostas | 10 min |
 | Testes | 15 min |
-| **Total** | **~75 min** |
+| **Total** | **~85 min** |
 
 ---
 
-## Riscos
+## Checklist (Guide §11)
 
-| Risco | Mitigação |
-|-------|-----------|
-| Scheduler cai | Keepalive + alerta se 0 execuções em 1h |
-| Timezone errado | Query com AT TIME ZONE + fuso no usuario |
-| Duplicação de envio | Campo `ultimo_envio` impede re-envio no mesmo dia |
-| Lembrete sem hora | Validação no Preparar Insert — pede hora antes de salvar |
-| Muitos lembretes simultâneos | LIMIT 50 na query + batch envio |
+- [ ] Queries parametrizadas ($1-$5)
+- [ ] Validação: título e hora obrigatórios
+- [ ] Wait Node com datetime ISO
+- [ ] Verificação de ativo antes de enviar
+- [ ] Marcar enviado + desativar se único
+- [ ] Loop recorrente (+24h)
+- [ ] Timezone Brasília (UTC-3)
+- [ ] Cancelamento funciona (ativo=false)
+- [ ] Teste hora passada → agenda amanhã
