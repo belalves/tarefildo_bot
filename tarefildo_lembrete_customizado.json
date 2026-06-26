@@ -1,0 +1,303 @@
+{
+  "name": "⏰ Tarefildo - Lembretes Customizados ⏰",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (a cada 5 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.id, l.titulo, l.hora, l.data, u.whatsapp_id, u.canais_ativos FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE l.ativo = true AND l.enviado = false AND l.data = CURRENT_DATE AND l.hora <= CURRENT_TIME;",
+        "options": {}
+      },
+      "id": "db-buscar-lembretes",
+      "name": "DB: Buscar Lembretes Pendentes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        600,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.titulo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-tem-lembretes",
+      "name": "Tem Lembretes?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst resultados = [];\n\nfor (const item of items) {\n  const { titulo, hora, whatsapp_id, canais_ativos, id: lembrete_id } = item.json;\n  const horaFormatada = hora.substring(0, 5);\n  const msg = `⏰ Eai, lembrete pra você: \"${titulo}\" (${horaFormatada}). Bora resolver isso!`;\n\n  if (whatsapp_id.includes('@telegram')) {\n    const chatId = whatsapp_id.split('@')[0];\n    resultados.push({ json: { canal: 'telegram', chatId, mensagem: msg, lembrete_id } });\n  } else if (whatsapp_id.includes('@c.us') || whatsapp_id.includes('@s.whatsapp.net')) {\n    resultados.push({ json: { canal: 'whatsapp', chatId: whatsapp_id, mensagem: msg, lembrete_id } });\n  } else {\n    const canais = canais_ativos || [];\n    if (canais.includes('telegram')) {\n      const chatId = whatsapp_id.split('@')[0];\n      resultados.push({ json: { canal: 'telegram', chatId, mensagem: msg, lembrete_id } });\n    }\n    if (canais.includes('whatsapp')) {\n      resultados.push({ json: { canal: 'whatsapp', chatId: whatsapp_id, mensagem: msg, lembrete_id } });\n    }\n  }\n}\n\nreturn resultados;"
+      },
+      "id": "formatar-mensagem",
+      "name": "Formatar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.canal }}",
+              "rightValue": "telegram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "qual-canal",
+      "name": "Qual Canal?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.mensagem }}",
+        "additionalFields": {}
+      },
+      "id": "enviar-telegram",
+      "name": "Enviar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1400,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "Tg2ndnk8e56GBk97",
+          "name": "Telegram account bot tarefildo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.mensagem }}",
+        "requestOptions": {}
+      },
+      "id": "enviar-whatsapp",
+      "name": "Enviar WhatsApp",
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202409,
+      "position": [
+        1400,
+        400
+      ],
+      "credentials": {
+        "wahaApi": {
+          "id": "F3j9V0WpvTJ6FcNM",
+          "name": "WAHA credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE lembretes SET enviado = true, enviado_em = NOW() WHERE id = '{{ $('Formatar Mensagem').first().json.lembrete_id }}';",
+        "options": {}
+      },
+      "id": "db-marcar-enviado",
+      "name": "DB: Marcar como Enviado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1600,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger (a cada 5 min)": {
+      "main": [
+        [
+          {
+            "node": "DB: Buscar Lembretes Pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: Buscar Lembretes Pendentes": {
+      "main": [
+        [
+          {
+            "node": "Tem Lembretes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Lembretes?": {
+      "main": [
+        [
+          {
+            "node": "Formatar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Qual Canal?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qual Canal?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Telegram": {
+      "main": [
+        [
+          {
+            "node": "DB: Marcar como Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "DB: Marcar como Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "customized-reminders-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "lembretes-customizados"
+  },
+  "nodeGroups": [],
+  "tags": [
+    {
+      "name": "automacao",
+      "id": "tag-automacao",
+      "updatedAt": "2026-06-26T12:00:00.000Z",
+      "createdAt": "2026-06-26T12:00:00.000Z"
+    },
+    {
+      "name": "lembretes",
+      "id": "tag-lembretes",
+      "updatedAt": "2026-06-26T12:00:00.000Z",
+      "createdAt": "2026-06-26T12:00:00.000Z"
+    }
+  ]
+}

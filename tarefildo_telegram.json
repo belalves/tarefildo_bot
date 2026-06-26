@@ -1673,8 +1673,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, $1, $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
-        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.dados.hora || '08:00' }}", "{{ $json.whatsapp_id }}"],
+        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, criado_em) SELECT u.id, $1, $2, NULLIF($3,'__NULL__')::date, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $4 RETURNING id, titulo, hora, data;",
+        "queryParameters": ["{{ $json.dados.titulo }}", "{{ $json.dados.hora || '08:00' }}", "{{ $json.dados.data || null }}", "{{ $json.whatsapp_id }}"],
         "options": {}
       },
       "id": "997142b6-98fc-4ed6-a450-0200217ffb5f",

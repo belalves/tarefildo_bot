@@ -1761,7 +1761,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst titulo = (item.dados?.titulo || '').trim();\nconst hora = (item.dados?.hora || '').trim();\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = item.chatId;\n\nif (!titulo) {\n  return [{ json: { chatId, mensagem: `${nome}, me fala o que quer lembrar e o horario. Tipo: 'me lembra de tomar remedio as 8h'.`, pular_db: true } }];\n}\n\nreturn [{ json: {\n  p1: titulo,\n  p2: hora || '08:00',\n  p3: item.whatsapp_id,\n  chatId, nome, source: item.source, whatsapp_id: item.whatsapp_id, pular_db: false\n} }];"
+        "jsCode": "const item = $input.first().json;\nconst titulo = (item.dados?.titulo || '').trim();\nconst hora = (item.dados?.hora || '').trim();\nconst data = (item.dados?.data || '').trim();\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = item.chatId;\n\nif (!titulo) {\n  return [{ json: { chatId, mensagem: `${nome}, me fala o que quer lembrar e o horario. Tipo: 'me lembra de tomar remedio as 8h'.`, pular_db: true } }];\n}\n\nreturn [{ json: {\n  p1: titulo,\n  p2: hora || '08:00',\n  p3: data || new Date().toISOString().split('T')[0],\n  p4: item.whatsapp_id,\n  chatId, nome, source: item.source, whatsapp_id: item.whatsapp_id, pular_db: false\n} }];"
       },
       "id": "fa35c990-30a3-4aa4-a4c6-85ec3038bbf9",
       "name": "Preparar Insert Lembrete",
@@ -1819,9 +1819,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
+        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, NULLIF($3,'__NULL__')::date, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $4 RETURNING id, titulo, hora, data;",
         "options": {
-          "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }}"
+          "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }},{{ $json.p4 }}"
         }
       },
       "id": "a2a82141-931b-48ce-8812-bd1a6427a8cf",
