@@ -1751,9 +1751,51 @@
     },
     {
       "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst titulo = (item.dados?.titulo || '').trim();\nconst hora = (item.dados?.hora || '').trim();\nconst nome = $('Filtrar Mensagem').first().json.nome || 'chefe';\nconst chatId = item.chatId;\n\nif (!titulo) {\n  return [{ json: { chatId, mensagem: `${nome}, me fala o que quer lembrar e o horario. Tipo: 'me lembra de tomar remedio as 8h'.`, pular_db: true } }];\n}\n\nreturn [{ json: {\n  p1: titulo,\n  p2: hora || '08:00',\n  p3: item.whatsapp_id,\n  chatId, nome, source: item.source, whatsapp_id: item.whatsapp_id, pular_db: false\n} }];"
+      },
+      "id": "prep-insert-lembrete",
+      "name": "Preparar Insert Lembrete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-552, 2176]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, $1, $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
-        "options": {}
+        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
+        "options": {
+          "queryReplacement": "={{ $json.p1 }},={{ $json.p2 }},={{ $json.p3 }}"
+        }
+      },
+      "id": "pular-db-lembrete",
+      "name": "Pular DB Lembrete?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [-452, 2176],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.pular_db }}", "rightValue": "true", "operator": { "type": "boolean", "operation": "true", "singleValue": true }, "id": "pular-check" }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pular"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $3 RETURNING id, titulo, hora;",
+        "options": {
+          "queryReplacement": "={{ $json.p1 }},={{ $json.p2 }},={{ $json.p3 }}"
+        }
       },
       "id": "25323264-9669-416c-915b-1f91a8495410",
       "name": "DB: Adicionar Lembrete",
@@ -2713,7 +2755,7 @@
         ],
         [
           {
-            "node": "DB: Adicionar Lembrete",
+            "node": "Preparar Insert Lembrete",
             "type": "main",
             "index": 0
           }
@@ -2880,6 +2922,35 @@
         [
           {
             "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Insert Lembrete": {
+      "main": [
+        [
+          {
+            "node": "Pular DB Lembrete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pular DB Lembrete?": {
+      "main": [
+        [
+          {
+            "node": "Route to Channel?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DB: Adicionar Lembrete",
             "type": "main",
             "index": 0
           }
