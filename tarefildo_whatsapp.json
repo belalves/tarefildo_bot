@@ -515,7 +515,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH get_user AS (\n  INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, criado_em)\n  VALUES (gen_random_uuid(), '{{ $json.whatsapp_id }}', 'Novo', 'America/Sao_Paulo', true, NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE SET whatsapp_id = EXCLUDED.whatsapp_id\n  RETURNING id\n)\nINSERT INTO lembretes (usuario_id, titulo, hora, ativo, criado_em)\nSELECT id, '{{ $json.dados.titulo }}', '{{ $json.dados.hora || \"08:00\" }}', true, NOW()\nFROM get_user\nRETURNING id, titulo, hora;",
+        "query": "WITH get_user AS (\n  INSERT INTO usuarios (id, whatsapp_id, nome, fuso_horario, lembretes_ativos, criado_em)\n  VALUES (gen_random_uuid(), $1, 'Novo', 'America/Sao_Paulo', true, NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE SET whatsapp_id = EXCLUDED.whatsapp_id\n  RETURNING id\n)\nINSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, criado_em)\nSELECT id, $2, $3, NULLIF($4, '__NULL__')::date, true, NOW()\nFROM get_user\nRETURNING id, titulo, hora, data;",
+        "queryParameters": ["{{ $json.whatsapp_id }}", "{{ $json.dados.titulo }}", "{{ $json.dados.hora || '08:00' }}", "{{ $json.dados.data || null }}"],
         "options": {}
       },
       "id": "016f86f8-cff2-436a-9f67-eabfc8432676",
