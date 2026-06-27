@@ -1,0 +1,226 @@
+{
+  "name": "⚙️ Tarefildo - Dashboard API ⚙️",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dashboard/stats",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "374ab574-37f1-44a8-a388-52a2a320758c",
+      "name": "GET Stats",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "55785a04-a6ff-42a0-884d-37b697a40232"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT COUNT(*) FROM tarefas t WHERE t.status = 'PENDENTE')::int as pendentes, (SELECT COUNT(*) FROM tarefas t WHERE t.status = 'CONCLUIDA')::int as concluidas, (SELECT COUNT(*) FROM tarefas t WHERE t.status = 'CANCELADA')::int as canceladas, (SELECT COUNT(*) FROM tarefas t WHERE t.status = 'PENDENTE' AND t.data_vencimento < CURRENT_DATE)::int as atrasadas, (SELECT COUNT(*) FROM tarefas t WHERE t.status = 'PENDENTE' AND t.data_vencimento = CURRENT_DATE)::int as hoje, (SELECT COUNT(*) FROM usuarios)::int as usuarios, (SELECT COUNT(*) FROM lembretes WHERE ativo = true)::int as lembretes_ativos;",
+        "options": {}
+      },
+      "id": "70541a13-c914-4ff9-934d-b35469f8c9d2",
+      "name": "DB: Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 0],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const db = $input.first().json;\nif (db.error || !db.pendentes && db.pendentes !== 0) {\n  return [{ json: { pendentes: 0, concluidas: 0, canceladas: 0, atrasadas: 0, hoje: 0, usuarios: 0, lembretes_ativos: 0 } }];\n}\nreturn [{ json: db }];"
+      },
+      "id": "fallback-stats",
+      "name": "Fallback Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($input.first().json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "3f61d441-1064-499c-a828-b74ca22a5ee8",
+      "name": "Responder Stats",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 0]
+    },
+    {
+      "parameters": {
+        "path": "dashboard/tarefas",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ffbf0c9e-7831-415a-a33a-dee53ad170e7",
+      "name": "GET Tarefas",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 240],
+      "webhookId": "1250b570-e8ad-472f-9d79-3e6001247792"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento, t.status, t.lembrete_enviado, t.criado_em, u.nome as usuario, u.whatsapp_id FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE t.titulo IS NOT NULL AND t.titulo != '' ORDER BY CASE t.status WHEN 'PENDENTE' THEN 1 WHEN 'AGUARDANDO_DATA' THEN 2 WHEN 'CONCLUIDA' THEN 3 WHEN 'CANCELADA' THEN 4 ELSE 5 END, t.data_vencimento ASC NULLS LAST, t.criado_em DESC LIMIT 50;",
+        "options": {}
+      },
+      "id": "efc178fb-2672-4224-8cc1-46401a5b2345",
+      "name": "DB: Tarefas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 240],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($input.all().map(i => i.json)) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "c9361c14-a284-4770-9a24-9a00941197bc",
+      "name": "Responder Tarefas",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [464, 240]
+    },
+    {
+      "parameters": {
+        "path": "dashboard/usuarios",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "055e6477-ce31-4963-8021-103fe41a784a",
+      "name": "GET Usuarios",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 480],
+      "webhookId": "0cfb861c-22d9-4497-aa25-83631e1decf8"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT u.id, u.nome, u.whatsapp_id, u.canais_ativos, u.criado_em, (SELECT COUNT(*) FROM tarefas t WHERE t.usuario_id = u.id AND t.status = 'PENDENTE')::int as tarefas_pendentes, (SELECT COUNT(*) FROM tarefas t WHERE t.usuario_id = u.id AND t.status = 'CONCLUIDA')::int as tarefas_concluidas FROM usuarios u ORDER BY u.criado_em DESC;",
+        "options": {}
+      },
+      "id": "6e59d41c-1303-462a-9b6b-c68af0e4734e",
+      "name": "DB: Usuarios",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 480],
+      "credentials": {
+        "postgres": {
+          "id": "lkBdUIuFYhIvqukn",
+          "name": "Neon Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($input.all().map(i => i.json)) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6b5af2bb-b6e5-4826-8af4-b086933295be",
+      "name": "Responder Usuarios",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [464, 480]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "GET Stats": {
+      "main": [[{ "node": "DB: Stats", "type": "main", "index": 0 }]]
+    },
+    "DB: Stats": {
+      "main": [[{ "node": "Fallback Stats", "type": "main", "index": 0 }]]
+    },
+    "Fallback Stats": {
+      "main": [[{ "node": "Responder Stats", "type": "main", "index": 0 }]]
+    },
+    "GET Tarefas": {
+      "main": [[{ "node": "DB: Tarefas", "type": "main", "index": 0 }]]
+    },
+    "DB: Tarefas": {
+      "main": [[{ "node": "Responder Tarefas", "type": "main", "index": 0 }]]
+    },
+    "GET Usuarios": {
+      "main": [[{ "node": "DB: Usuarios", "type": "main", "index": 0 }]]
+    },
+    "DB: Usuarios": {
+      "main": [[{ "node": "Responder Usuarios", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1717,7 +1717,9 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT t.id, t.titulo, t.data_vencimento, t.hora_vencimento, t.prioridade FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' ORDER BY CASE WHEN t.prioridade = 'ALTA' THEN 1 WHEN t.prioridade = 'MEDIA' THEN 2 ELSE 3 END ASC, t.data_vencimento ASC NULLS LAST LIMIT 20;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.whatsapp_id }}"
+        }
       },
       "id": "9849f391-a004-4913-aa4f-2f7b9441a582",
       "name": "DB: Listar Tarefas",
@@ -1844,7 +1846,9 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT l.id, l.titulo, l.hora FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE u.whatsapp_id = $1 AND l.ativo = true ORDER BY l.hora;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.whatsapp_id }}"
+        }
       },
       "id": "1d0b8631-597e-41f8-b2b9-3115e5ba27dc",
       "name": "DB: Listar Lembretes",
@@ -1880,7 +1884,9 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT titulo, COUNT(*)::int as qtd, array_agg(id ORDER BY criado_em DESC) as ids FROM tarefas t JOIN usuarios u ON u.id = t.usuario_id WHERE u.whatsapp_id = $1 AND t.status = 'PENDENTE' GROUP BY titulo HAVING COUNT(*) > 1;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.whatsapp_id }}"
+        }
       },
       "id": "2069d58a-9a5a-4fbc-a13c-6d24cfebba34",
       "name": "DB: Buscar Duplicatas",
@@ -1916,7 +1922,9 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "WITH duplicatas AS ( SELECT id, titulo, ROW_NUMBER() OVER (PARTITION BY titulo ORDER BY criado_em DESC) as rn FROM tarefas WHERE usuario_id = (SELECT id FROM usuarios WHERE whatsapp_id = $1) AND status = 'PENDENTE' ) UPDATE tarefas SET status = 'CANCELADA', atualizado_em = NOW() WHERE id IN (SELECT id FROM duplicatas WHERE rn > 1) RETURNING titulo;",
-        "options": {}
+        "options": {
+          "queryReplacement": "={{ $json.whatsapp_id }}"
+        }
       },
       "id": "d0cce004-250a-49dd-8b2b-1652e2c4cfe7",
       "name": "DB: Limpar Duplicatas",

@@ -3,7 +3,11 @@
     "allow": [
       "PowerShell(grep -v queryParameters)",
       "PowerShell(head -5)",
-      "PowerShell(cd \"c:\\\\Projetos\\\\Bot\"; \\(Get-Content tarefildo_unified.json | ConvertFrom-Json\\) | Out-Null; Write-Host \"✅ JSON válido - Arquivo unificado pronto!\" -ForegroundColor Green)"
+      "PowerShell(cd \"c:\\\\Projetos\\\\Bot\"; \\(Get-Content tarefildo_unified.json | ConvertFrom-Json\\) | Out-Null; Write-Host \"✅ JSON válido - Arquivo unificado pronto!\" -ForegroundColor Green)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(git pull *)"
     ]
   }
 }
