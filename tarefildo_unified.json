@@ -1933,7 +1933,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, NULLIF($3,'__NULL__')::date, true, NOW() FROM usuarios u WHERE u.whatsapp_id = $4 RETURNING id, titulo, hora, data;",
+        "query": "INSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, enviado, criado_em) SELECT u.id, NULLIF($1,'__NULL__'), $2, NULLIF($3,'__NULL__')::date, true, false, NOW() FROM usuarios u WHERE u.whatsapp_id = $4 RETURNING id, titulo, hora, data;",
         "options": {
           "queryReplacement": "{{ $json.p1 }},{{ $json.p2 }},{{ $json.p3 }},{{ $json.p4 }}"
         }

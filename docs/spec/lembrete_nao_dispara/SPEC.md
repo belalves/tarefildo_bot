@@ -26,6 +26,22 @@ Bot:     "1. tirar leite geladeira — 23:09"   ← ❌ sem data
 
 ## Problemas Identificados
 
+### Bug 0: INSERT não seta `enviado = false` — campo fica NULL
+
+**Causa raiz:** O INSERT de lembretes não inclui a coluna `enviado`. Se a coluna não tem `DEFAULT false` na tabela, fica `NULL`. A query do cron usa `WHERE l.enviado = false`, mas em SQL `NULL = false` retorna `NULL` (não `true`) — nenhum lembrete é encontrado.
+
+**INSERT original:**
+```sql
+INSERT INTO lembretes (usuario_id, titulo, hora, data, ativo, criado_em) ...
+-- sem 'enviado' → fica NULL
+```
+
+**Correções:**
+1. INSERT: adicionar `enviado, ... false` explicitamente (novos lembretes)
+2. WHERE: trocar `l.enviado = false` por `l.enviado IS NOT TRUE` (funciona com `false` E `NULL`)
+
+---
+
 ### Bug 1: CURRENT_DATE/CURRENT_TIME em UTC vs dados em horário local
 
 **Causa raiz:** O banco Neon PostgreSQL roda em **UTC**. A query do cron usa `CURRENT_DATE` e `CURRENT_TIME` que retornam valores em UTC. Porém os lembretes são salvos com data/hora no fuso do usuário (Brasil, UTC-3).
