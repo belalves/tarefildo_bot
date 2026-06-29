@@ -24,7 +24,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT l.id, l.titulo, l.hora, l.data, u.whatsapp_id, u.canais_ativos FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE l.ativo = true AND l.enviado = false AND l.data = CURRENT_DATE AND l.hora <= CURRENT_TIME;",
+        "query": "SELECT l.id, l.titulo, l.hora, l.data, u.whatsapp_id, u.canais_ativos FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE l.ativo = true AND l.enviado = false AND l.data = (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::date AND l.hora <= (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::time;",
         "options": {}
       },
       "id": "db-buscar-lembretes",
@@ -168,7 +168,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE lembretes SET enviado = true, enviado_em = NOW() WHERE id = '{{ $('Formatar Mensagem').first().json.lembrete_id }}';",
+        "query": "UPDATE lembretes SET enviado = true, enviado_em = NOW() WHERE id = '{{ $('Formatar Mensagem').item.json.lembrete_id }}';",
         "options": {}
       },
       "id": "db-marcar-enviado",
