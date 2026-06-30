@@ -3162,7 +3162,7 @@
       "main": [
         [
           {
-            "node": "Recompor Contexto Lista",
+            "node": "Preparar Prompt Lista",
             "type": "main",
             "index": 0
           }
@@ -3623,17 +3623,6 @@
         [
           {
             "node": "Route to Channel?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Recompor Contexto Lista": {
-      "main": [
-        [
-          {
-            "node": "Preparar Prompt Lista",
             "type": "main",
             "index": 0
           }
