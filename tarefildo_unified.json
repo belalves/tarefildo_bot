@@ -1862,7 +1862,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const busca = $('DB: Buscar para Concluir').first().json;\nconst prep = $('Preparar Busca Conclusão').first().json;\nreturn [{ json: { chatId: prep.chatId, mensagem: `Nao achei, ${prep.nome}. Me fala o nome.` } }];"
+        "jsCode": "const busca = $('DB: Buscar para Concluir').first().json;\nconst prep = $('Preparar Busca Conclusão').first().json;\nconst filtro = $('Filtrar Mensagem').first().json;\nconst nome = prep.nome || filtro.nome || 'chefe';\nreturn [{ json: { chatId: prep.chatId, mensagem: `Nao achei, ${nome}. Me fala o nome.` } }];"
       },
       "id": "b34b0f0b-0d1a-4815-a258-a523788b6dd6",
       "name": "Tarefa Não Encontrada",
@@ -2279,7 +2279,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst firstItem = items[0]?.json || {};\nconst nome = (firstItem.nome || '').trim() || 'chefe';\nconst filtro = { filtro_periodo: firstItem.filtro_periodo || 'tudo', nome, chatId: firstItem.chatId || '', whatsapp_id: firstItem.whatsapp_id || '', source: firstItem.source || '' };\nconst v = items.filter(i => i.json?.titulo);\nconst periodo = (filtro.filtro_periodo || 'tudo').toLowerCase();\nconst nome = filtro.nome || 'chefe';\n\nconst periodoLabel = {\n  'hoje': 'hoje',\n  'amanha': 'amanha',\n  'semana': 'essa semana',\n  'proxima_semana': 'semana que vem',\n  'tudo': 'no geral'\n}[periodo] || periodo;\n\nlet listaFormatada = '';\nif (v.length > 0) {\n  listaFormatada = v.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) {\n      const p = i.json.data_vencimento.split('T')[0].split('-');\n      info = `${p[2]}/${p[1]}/${p[0]}`;\n    }\n    if (i.json.hora_vencimento) info += ` as ${i.json.hora_vencimento.substring(0, 5)}`;\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n}\n\nconst prompt = `Voce eh o Tarefildo Silva das Pendencias, bot assistente sarcastico e engracado. O usuario se chama ${nome}.\n\nContexto:\n- Usuario pediu para listar tarefas ${periodoLabel}\n- Total de tarefas encontradas: ${v.length}\n\n${v.length > 0 ? `Tarefas listadas:\\n${listaFormatada}` : 'Nenhuma tarefa encontrada nesse periodo.'}\n\nGere uma resposta NATURAL em uma ou duas frases diretas:\n- Se houver tarefas: liste resumidamente com tom sarcastico mas motivador\n- Se nao houver: celebre a lista vazia com humor apropriado\n- Sempre na voz do Tarefildo (usa: bora resolver, ja era pra ontem, confia no Tarefildo)\n- Use 1-2 emojis, nao exagere\n- Seja breve (ate 2 linhas se houver tarefas, 1 linha se vazio)\n- NUNCA repita a mesma resposta palavra por palavra - varie o tom, sarcasmo, encerramento, emojis\n\nResponda APENAS a mensagem em texto puro, sem JSON, sem markdown, sem backticks.`;\n\nconst text = v.length > 0 ? `${v.length} tarefa${v.length > 1 ? 's' : ''} ${periodoLabel}` : `nenhuma tarefa ${periodoLabel}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  tarefas_count: v.length,\n  periodo: periodoLabel,\n  nome,\n  chatId: filtro.chatId,\n  whatsapp_id: filtro.whatsapp_id,\n  source: filtro.source\n} }];"
+        "jsCode": "const items = $input.all();\nconst firstItem = items[0]?.json || {};\nconst nome = (firstItem.nome || '').trim() || 'chefe';\nconst filtro = { filtro_periodo: firstItem.filtro_periodo || 'tudo', nome, chatId: firstItem.chatId || '', whatsapp_id: firstItem.whatsapp_id || '', source: firstItem.source || '' };\nconst v = items.filter(i => i.json?.titulo);\nconst periodo = (filtro.filtro_periodo || 'tudo').toLowerCase();\n\nconst periodoLabel = {\n  'hoje': 'hoje',\n  'amanha': 'amanha',\n  'semana': 'essa semana',\n  'proxima_semana': 'semana que vem',\n  'tudo': 'no geral'\n}[periodo] || periodo;\n\nlet listaFormatada = '';\nif (v.length > 0) {\n  listaFormatada = v.map((i, idx) => {\n    let info = 'sem data';\n    if (i.json.data_vencimento) {\n      const p = i.json.data_vencimento.split('T')[0].split('-');\n      info = `${p[2]}/${p[1]}/${p[0]}`;\n    }\n    if (i.json.hora_vencimento) info += ` as ${i.json.hora_vencimento.substring(0, 5)}`;\n    return `${idx+1}. ${i.json.titulo} — ${info}`;\n  }).join('\\n');\n}\n\nconst prompt = `Voce eh o Tarefildo Silva das Pendencias, bot assistente sarcastico e engracado. O usuario se chama ${nome}.\n\nContexto:\n- Usuario pediu para listar tarefas ${periodoLabel}\n- Total de tarefas encontradas: ${v.length}\n\n${v.length > 0 ? `Tarefas listadas:\\n${listaFormatada}` : 'Nenhuma tarefa encontrada nesse periodo.'}\n\nGere uma resposta NATURAL em uma ou duas frases diretas:\n- Se houver tarefas: liste resumidamente com tom sarcastico mas motivador\n- Se nao houver: celebre a lista vazia com humor apropriado\n- Sempre na voz do Tarefildo (usa: bora resolver, ja era pra ontem, confia no Tarefildo)\n- Use 1-2 emojis, nao exagere\n- Seja breve (ate 2 linhas se houver tarefas, 1 linha se vazio)\n- NUNCA repita a mesma resposta palavra por palavra - varie o tom, sarcasmo, encerramento, emojis\n\nResponda APENAS a mensagem em texto puro, sem JSON, sem markdown, sem backticks.`;\n\nconst text = v.length > 0 ? `${v.length} tarefa${v.length > 1 ? 's' : ''} ${periodoLabel}` : `nenhuma tarefa ${periodoLabel}`;\n\nconst requestBody = JSON.stringify({model:\"deepseek-chat\",messages:[{role:\"system\",content:prompt},{role:\"user\",content:text}],temperature:0.7,max_tokens:150});\n\nreturn [{ json: {\n  prompt,\n  text,\n  tarefas_count: v.length,\n  periodo: periodoLabel,\n  nome,\n  chatId: filtro.chatId,\n  whatsapp_id: filtro.whatsapp_id,\n  source: filtro.source,\n  requestBody\n} }];"
       },
       "id": "c106c65c-ff71-49ff-a93b-b7ce0fe094a2",
       "name": "Preparar Prompt Lista",
@@ -2292,40 +2292,16 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.deepseek.com/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\"model\":\"deepseek-chat\",\"messages\":[{\"role\":\"system\",\"content\":\"{{ $json.prompt }}\"},{\"role\":\"user\",\"content\":\"{{ $json.text }}\"}],\"temperature\":0.7,\"max_tokens\":150}",
-        "options": {
-          "timeout": 15000
-        }
+        "jsCode": "const item = $input.first().json;\nconst apiKey = $getEnv('DEEPSEEK_API_KEY') || 'sk-';\nconst requestBody = item.requestBody;\nconst url = 'https://api.deepseek.com/chat/completions';\n\ntry {\n  const response = await fetch(url, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'Authorization': `Bearer ${apiKey}`\n    },\n    body: requestBody\n  });\n  \n  const data = await response.json();\n  \n  if (!response.ok) {\n    return [{ json: { error: data.error?.message || 'API Error', choices: null } }];\n  }\n  \n  return [{ json: data }];\n} catch (err) {\n  return [{ json: { error: err.message, choices: null } }];\n}"
       },
       "id": "79f5d007-d90b-4b2d-a8c2-9a79bdc89aa5",
       "name": "DeepSeek: Gerar Resposta Lista",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         15728,
         24960
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "h8EobmVsCvc5TFvn",
-          "name": "DeepSeek API"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -2979,7 +2955,7 @@
         ],
         [
           {
-            "node": "Preparar Busca Conclusão",
+            "node": "Preparar Filtro Lista",
             "type": "main",
             "index": 0
           }
