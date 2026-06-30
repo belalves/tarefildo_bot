@@ -7,7 +7,14 @@
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git push *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(xargs grep -l \"CREATE TABLE usuarios\\\\|CREATE TABLE tarefas\")",
+      "Bash(git commit -m ' *)",
+      "Bash(mkdir -p \"c:/Projetos/tarefildo_bot/docs/spec/listar_tarefas_por_periodo\")",
+      "Bash(powershell -NoProfile -Command ' *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Projetos\\tarefildo_bot\\docs\\spec"
     ]
   }
 }
