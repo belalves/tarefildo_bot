@@ -1,0 +1,160 @@
+{
+  "description": "Sprint 1: 5 nós para Naturalização - Copy & Paste no n8n",
+  "instruction": "1. Abra o workflow em n8n. 2. Copie cada nó. 3. Cole na posição indicada. 4. Conecte conforme diagrama.",
+  "nodes": [
+    {
+      "name": "INSTRUÇÕES",
+      "content": "SPRINT 1 - NOVO CADASTRO + ADICIONAR + EDITAR + CONCLUIR + DUPLICATA",
+      "estimate": "2 horas total",
+      "order": [
+        "1. Criar Prep-Nova-Conta (Code)",
+        "2. Criar DeepSeek-Naturalizar (HTTP)",
+        "3. Criar Extract-Nova-Conta (Code)",
+        "4. Conectar fluxo novo cadastro",
+        "5. Testar novo cadastro",
+        "6. Repetir 1-5 para outros intents"
+      ]
+    },
+    {
+      "id": "node-prep-nova-conta",
+      "name": "Prep-Nova-Conta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [24500, 61800],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst nome = input.nome || 'chefe';\nconst chatId = input.chatId || '';\nconst canal = input.canal || 'unknown';\nconst source = input.source || '';\nconst whatsapp_id = input.whatsapp_id || '';\n\nconst prompt = `Você é o Tarefildo Silva das Pendências. Bot assistente de tarefas.\nPersonalidade: funcionário raiz, engraçado, sarcástico, motivador.\nLocuções: \"bora resolver\", \"já era pra ontem\", \"confia no Tarefildo\", \"menos bagunça\".\n\nUm novo usuário se cadastrou:\n- Nome: ${nome}\n- Canal: ${canal}\n\nDê boas-vindas de forma calorosa e descontraída. Convide a adicionar tarefas.\nMáximo 3 frases. Use 2-3 emojis. Responda APENAS em texto puro, sem JSON.`;\n\nconst text = `novo_usuario: ${nome}, canal: ${canal}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  chatId,\n  nome,\n  source,\n  whatsapp_id,\n  intent: 'novo_cadastro',\n  ...input\n} }];"
+      }
+    },
+    {
+      "id": "node-deepseek-naturalizar",
+      "name": "DeepSeek-Naturalizar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [25500, 62000],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"deepseek-chat\",\"messages\":[{\"role\":\"system\",\"content\":\"{{ $json.prompt }}\"},{\"role\":\"user\",\"content\":\"{{ $json.text }}\"}],\"temperature\":0.5,\"max_tokens\":150}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "h8EobmVsCvc5TFvn",
+          "name": "DeepSeek API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "node-extract-nova-conta",
+      "name": "Extract-Nova-Conta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [26500, 61800],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Prep-Nova-Conta').first().json;\n\nconst fallback = `Beleza ${prep.nome}, bem-vindo ao Tarefildo! ☕ Bora organizar suas tarefas?`;\n\nif (response.error || !response.choices) {\n  console.warn(`[FALLBACK-NOVA-CONTA] DeepSeek falhou`);\n  return [{ json: {\n    chatId: prep.chatId,\n    mensagem: fallback,\n    source: prep.source,\n    whatsapp_id: prep.whatsapp_id,\n    fallback_used: true\n  } }];\n}\n\nlet mensagem = response.choices[0].message.content.trim();\nmensagem = mensagem.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nreturn [{ json: {\n  chatId: prep.chatId,\n  mensagem: mensagem,\n  source: prep.source,\n  whatsapp_id: prep.whatsapp_id,\n  fallback_used: false\n} }];"
+      }
+    },
+    {
+      "id": "node-prep-adicionar-tarefa",
+      "name": "Prep-Adicionar-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [24500, 62000],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst nome = input.nome || 'chefe';\nconst chatId = input.chatId || '';\nconst source = input.source || '';\nconst whatsapp_id = input.whatsapp_id || '';\nconst titulo = input.titulo || input.dados?.titulo || '';\nconst data = input.data || input.dados?.data || '';\nconst status = input.status_tarefa || 'PENDENTE';\n\nconst dataFormatada = data ? new Date(data).toLocaleDateString('pt-BR') : null;\n\nconst prompt = `Você é Tarefildo Silva das Pendências. Bot assistente.\nUma tarefa foi anotada:\n- Título: \"${titulo}\"\n- Status: ${status}\n- Data: ${dataFormatada || 'não definida'}\n- Usuário: ${nome}\n\nConfirme naturalmente que a tarefa foi anotada.\n${status === 'AGUARDANDO_DATA' ? 'Peça pela data de forma descontraída.' : 'Confirme a data.  '}\nMáximo 2 frases. Use 1-2 emojis. Responda apenas em texto puro.`;\n\nconst text = `tarefa: ${titulo}, status: ${status}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  chatId,\n  nome,\n  source,\n  whatsapp_id,\n  intent: 'adicionar_tarefa',\n  titulo,\n  status,\n  ...input\n} }];"
+      }
+    },
+    {
+      "id": "node-extract-adicionar-tarefa",
+      "name": "Extract-Adicionar-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [26500, 62000],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Prep-Adicionar-Tarefa').first().json;\nconst status = prep.status || 'PENDENTE';\nconst titulo = prep.titulo || '';\n\nconst fallback = status === 'AGUARDANDO_DATA'\n  ? `Anotado, ${prep.nome}: '${titulo}'. Me fala a data 👀`\n  : `${prep.nome}, '${titulo}' anotado! Confia no Tarefildo ☕`;\n\nif (response.error || !response.choices) {\n  console.warn(`[FALLBACK-ADICIONAR-TAREFA] DeepSeek falhou`);\n  return [{ json: {\n    chatId: prep.chatId,\n    mensagem: fallback,\n    source: prep.source,\n    whatsapp_id: prep.whatsapp_id,\n    fallback_used: true\n  } }];\n}\n\nlet mensagem = response.choices[0].message.content.trim();\nmensagem = mensagem.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nreturn [{ json: {\n  chatId: prep.chatId,\n  mensagem: mensagem,\n  source: prep.source,\n  whatsapp_id: prep.whatsapp_id,\n  fallback_used: false\n} }];"
+      }
+    },
+    {
+      "id": "node-prep-editar-tarefa",
+      "name": "Prep-Editar-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [24500, 62200],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst nome = input.nome || 'chefe';\nconst chatId = input.chatId || '';\nconst source = input.source || '';\nconst whatsapp_id = input.whatsapp_id || '';\nconst titulo = input.titulo || '';\nconst novaData = input.nova_data || input.dados?.nova_data || '';\nconst novaHora = input.nova_hora || input.dados?.nova_hora || '';\n\nconst dataFormatada = novaData ? new Date(novaData).toLocaleDateString('pt-BR') : null;\nconst alteracoes = [];\nif (dataFormatada) alteracoes.push(`nova data ${dataFormatada}`);\nif (novaHora) alteracoes.push(`horário ${novaHora}`);\nconst alteracoesStr = alteracoes.length > 0 ? alteracoes.join(', ') : 'outras alterações';\n\nconst prompt = `Você é Tarefildo.\nUma tarefa foi editada:\n- Tarefa: \"${titulo}\"\n- Alterações: ${alteracoesStr}\n- Usuário: ${nome}\n\nConfirme naturalmente a edição.\nMáximo 2 frases. Use 1-2 emojis. Responda apenas em texto puro.`;\n\nconst text = `edição: ${titulo}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  chatId,\n  nome,\n  source,\n  whatsapp_id,\n  intent: 'editar_tarefa',\n  titulo,\n  ...input\n} }];"
+      }
+    },
+    {
+      "id": "node-extract-editar-tarefa",
+      "name": "Extract-Editar-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [26500, 62200],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Prep-Editar-Tarefa').first().json;\nconst titulo = prep.titulo || '';\n\nconst fallback = `Pronto ${prep.nome}, '${titulo}' atualizada! Confia no Tarefildo ☕`;\n\nif (response.error || !response.choices) {\n  console.warn(`[FALLBACK-EDITAR-TAREFA] DeepSeek falhou`);\n  return [{ json: {\n    chatId: prep.chatId,\n    mensagem: fallback,\n    source: prep.source,\n    whatsapp_id: prep.whatsapp_id,\n    fallback_used: true\n  } }];\n}\n\nlet mensagem = response.choices[0].message.content.trim();\nmensagem = mensagem.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nreturn [{ json: {\n  chatId: prep.chatId,\n  mensagem: mensagem,\n  source: prep.source,\n  whatsapp_id: prep.whatsapp_id,\n  fallback_used: false\n} }];"
+      }
+    },
+    {
+      "id": "node-prep-concluir-tarefa",
+      "name": "Prep-Concluir-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [24500, 62400],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst nome = input.nome || 'chefe';\nconst chatId = input.chatId || '';\nconst source = input.source || '';\nconst whatsapp_id = input.whatsapp_id || '';\nconst titulo = input.titulo || input.titulo_encontrado || '';\n\nconst prompt = `Você é Tarefildo.\nUma tarefa foi marcada como concluída:\n- Tarefa: \"${titulo}\"\n- Usuário: ${nome}\n\nComemorem! Use tom celebratório e motivador.\nMáximo 2 frases. Use 2-3 emojis. Responda apenas em texto puro.`;\n\nconst text = `conclusão: ${titulo}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  chatId,\n  nome,\n  source,\n  whatsapp_id,\n  intent: 'concluir_tarefa',\n  titulo,\n  ...input\n} }];"
+      }
+    },
+    {
+      "id": "node-extract-concluir-tarefa",
+      "name": "Extract-Concluir-Tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [26500, 62400],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Prep-Concluir-Tarefa').first().json;\nconst titulo = prep.titulo || '';\n\nconst fallback = `Ai sim, ${prep.nome}! '${titulo}' riscada 💪🎉`;\n\nif (response.error || !response.choices) {\n  console.warn(`[FALLBACK-CONCLUIR-TAREFA] DeepSeek falhou`);\n  return [{ json: {\n    chatId: prep.chatId,\n    mensagem: fallback,\n    source: prep.source,\n    whatsapp_id: prep.whatsapp_id,\n    fallback_used: true\n  } }];\n}\n\nlet mensagem = response.choices[0].message.content.trim();\nmensagem = mensagem.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nreturn [{ json: {\n  chatId: prep.chatId,\n  mensagem: mensagem,\n  source: prep.source,\n  whatsapp_id: prep.whatsapp_id,\n  fallback_used: false\n} }];"
+      }
+    },
+    {
+      "id": "node-prep-duplicata",
+      "name": "Prep-Duplicata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [24500, 62600],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst nome = input.nome || 'chefe';\nconst chatId = input.chatId || '';\nconst source = input.source || '';\nconst whatsapp_id = input.whatsapp_id || '';\nconst duplicataTitulo = input.duplicata_titulo || '';\nconst duplicataInfo = input.duplicata_info || 'sem data';\n\nconst prompt = `Você é Tarefildo.\nUm usuário tentou adicionar uma tarefa que já existe:\n- Tarefa: \"${duplicataTitulo}\"\n- Data Anterior: ${duplicataInfo}\n- Usuário: ${nome}\n\nAponte a duplicata e pergunte: quer criar mesmo assim, editar a existente ou cancelar?\nMáximo 2 frases. Use 1-2 emojis. Responda apenas em texto puro.`;\n\nconst text = `duplicata: ${duplicataTitulo}`;\n\nreturn [{ json: {\n  prompt,\n  text,\n  chatId,\n  nome,\n  source,\n  whatsapp_id,\n  intent: 'duplicata_detectada',\n  duplicata_titulo: duplicataTitulo,\n  ...input\n} }];"
+      }
+    },
+    {
+      "id": "node-extract-duplicata",
+      "name": "Extract-Duplicata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [26500, 62600],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prep = $('Prep-Duplicata').first().json;\nconst titulo = prep.duplicata_titulo || '';\nconst info = prep.duplicata_info || '';\n\nconst fallback = `${prep.nome}, já tem '${titulo}' ${info}. Quer criar outra, editar ou cancelar?`;\n\nif (response.error || !response.choices) {\n  console.warn(`[FALLBACK-DUPLICATA] DeepSeek falhou`);\n  return [{ json: {\n    chatId: prep.chatId,\n    mensagem: fallback,\n    source: prep.source,\n    whatsapp_id: prep.whatsapp_id,\n    fallback_used: true\n  } }];\n}\n\nlet mensagem = response.choices[0].message.content.trim();\nmensagem = mensagem.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nreturn [{ json: {\n  chatId: prep.chatId,\n  mensagem: mensagem,\n  source: prep.source,\n  whatsapp_id: prep.whatsapp_id,\n  fallback_used: false\n} }];"
+      }
+    },
+    {
+      "name": "INSTRUÇÕES DE CONEXÃO",
+      "content": "Conecte da seguinte forma:\n\n1. NOVO CADASTRO:\n   [Resposta Consolidou] REMOVER\n   [Resposta Novo Cadastro] REMOVER\n   [DB: Criar Novo Usuário] → Prep-Nova-Conta\n   Prep-Nova-Conta → DeepSeek-Naturalizar\n   DeepSeek-Naturalizar → Extract-Nova-Conta\n   Extract-Nova-Conta → Route to Channel?\n\n2. ADICIONAR TAREFA:\n   [DB: Adicionar Tarefa] → Prep-Adicionar-Tarefa\n   Prep-Adicionar-Tarefa → DeepSeek-Naturalizar\n   DeepSeek-Naturalizar → Extract-Adicionar-Tarefa\n   Extract-Adicionar-Tarefa → Route to Channel?\n   [Resposta Tarefa] REMOVER\n\n3. EDITAR TAREFA:\n   [DB: Editar Tarefa] → Prep-Editar-Tarefa\n   Prep-Editar-Tarefa → DeepSeek-Naturalizar\n   DeepSeek-Naturalizar → Extract-Editar-Tarefa\n   Extract-Editar-Tarefa → Route to Channel?\n   [Resposta Editou] REMOVER\n\n4. CONCLUIR TAREFA:\n   [DB: Concluir Tarefa] → Prep-Concluir-Tarefa\n   Prep-Concluir-Tarefa → DeepSeek-Naturalizar\n   DeepSeek-Naturalizar → Extract-Concluir-Tarefa\n   Extract-Concluir-Tarefa → Route to Channel?\n   [Resposta Concluiu Tarefa] REMOVER\n\n5. DUPLICATA:\n   [Avaliar Duplicata] → Prep-Duplicata (se tem_duplicata=true)\n   Prep-Duplicata → DeepSeek-Naturalizar\n   DeepSeek-Naturalizar → Extract-Duplicata\n   Extract-Duplicata → Route to Channel?\n   [Perguntar Duplicata] REMOVER\n\nNOTA: DeepSeek-Naturalizar é REUTILIZÁVEL por todos!"
+    }
+  ]
+}

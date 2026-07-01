@@ -24,7 +24,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT l.id, l.titulo, l.hora, l.data, u.whatsapp_id, u.canais_ativos FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE l.ativo = true AND l.enviado IS NOT TRUE AND l.data::date = (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::date AND l.hora::time <= (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::time;",
+        "query": "SELECT l.id, l.titulo, l.hora, l.data, u.whatsapp_id, u.canais_ativos FROM lembretes l JOIN usuarios u ON u.id = l.usuario_id WHERE l.ativo = true AND l.enviado IS NOT TRUE AND (l.data IS NULL OR l.data::date = (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::date) AND l.hora::time <= (NOW() AT TIME ZONE COALESCE(u.fuso_horario, 'America/Sao_Paulo'))::time;",
         "options": {}
       },
       "id": "db-buscar-lembretes",
