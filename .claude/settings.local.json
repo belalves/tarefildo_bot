@@ -11,7 +11,16 @@
       "Bash(xargs grep -l \"CREATE TABLE usuarios\\\\|CREATE TABLE tarefas\")",
       "Bash(git commit -m ' *)",
       "Bash(mkdir -p \"c:/Projetos/tarefildo_bot/docs/spec/listar_tarefas_por_periodo\")",
-      "Bash(powershell -NoProfile -Command ' *)"
+      "Bash(powershell -NoProfile -Command ' *)",
+      "PowerShell(cd C:\\\\Projetos\\\\tarefildo_bot; \\(Get-Content tarefildo_unified.json | Select-String '\"connections\"'\\).LineNumber)",
+      "PowerShell(cd C:\\\\Projetos\\\\tarefildo_bot; \\(Get-Content tarefildo_unified.json | Select-String '\"name\": \"Preparar Prompt Lista\"' -A 5\\).LineNumber[0])",
+      "Bash(python3 -m json.tool tarefildo_unified.json)",
+      "Bash(git commit -m 'fix: resolver erro definitivo de interpolacao JSON no DeepSeek *)",
+      "Bash(node -e ' *)",
+      "Bash(python implementar_sprint1.py)",
+      "Bash(python3)",
+      "Bash(sed -i 's|filtro_data_inicio: dataInicio \\\\|\\\\| \"\"|filtro_data_inicio: dataInicio \\\\|\\\\| null|g' tarefildo_unified.json)",
+      "Bash(sed -i 's|filtro_data_fim: dataFim \\\\|\\\\| \"\"|filtro_data_fim: dataFim \\\\|\\\\| null|g' tarefildo_unified.json)"
     ],
     "additionalDirectories": [
       "c:\\Projetos\\tarefildo_bot\\docs\\spec"
